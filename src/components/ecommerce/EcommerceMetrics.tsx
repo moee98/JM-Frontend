@@ -5,6 +5,8 @@ import {
   GroupIcon,
 } from "../../icons";
 import Badge from "../ui/badge/Badge";
+import { useState } from "react";
+import {useAllJobs} from "../../hooks/useJobs";
 
 export default function EcommerceMetrics() {
   return (
