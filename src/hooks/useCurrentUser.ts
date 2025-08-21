@@ -4,7 +4,12 @@ import { getCurrentUser } from "../services/authService";
 export function useCurrentUser() {
   const [user, setUser] = useState(() => {
     const storedUser = localStorage.getItem("user");
-    return storedUser ? JSON.parse(storedUser) : null;
+    localStorage.setItem("user", storedUser || "{}");
+    const parsedUser = storedUser ? JSON.parse(storedUser) : null;
+    //localStorage.setItem("token", storedUser ? parsedUser.token : "");
+    //localStorage.setItem("refreshToken", storedUser ? parsedUser.refreshToken : "");
+
+    return storedUser ? parsedUser : null;
   });
 
   const refreshUser = async () => {

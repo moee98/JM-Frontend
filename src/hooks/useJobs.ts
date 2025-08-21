@@ -1,51 +1,43 @@
+// src/hooks/useJobs.ts
 import { useState, useEffect } from "react";
-import { getAllJobs, getJobById } from "../services/jobService";
+import * as JobService from "../services/jobService";
 
-export function useAllJobs() {
-  const [user, setJob] = useState(() => {
-    const storedUser = localStorage.getItem("user");
-    return storedUser ? JSON.parse(storedUser) : null;
-  });
+export function useJobs() {
+  const [jobs, setJobs] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  const getJobs = async () => {
+  const fetchJobs = async () => {
+    setLoading(true);
+    setError(null);
     try {
-      const jobs = await getAllJobs();
-      setJob(jobs);
-      
-    } catch (error) {
-      setJob(null);
-     
+      const data = await JobService.getJobs();
+      setJobs(data);
+    } catch (err: any) {
+      setError(err.message || "Failed to load jobs");
+    } finally {
+      setLoading(false);
     }
   };
 
+  const addJob = async (jobData: any) => {
+    await JobService.createJob(jobData);
+    await fetchJobs(); // Refresh list after creation
+  };
+
+  const editJob = async (id: string, jobData: any) => {
+    await JobService.updateJob(id, jobData);
+    await fetchJobs();
+  };
+
+  const removeJob = async (id: string) => {
+    await JobService.deleteJob(id);
+    await fetchJobs();
+  };
+
   useEffect(() => {
-    if (!user) {
-      getJobs();
-    }
+    fetchJobs();
   }, []);
 
-  return { user, setJob, getJobs };
-}
-export function useJob(jobId: string | null) {
-  const [job, setJob] = useState<any>(null);
-
-  const getJob = async () => {
-    if (!jobId) {
-      setJob(null);
-      return;
-    }
-    try {
-      const jobData = await getJobById(jobId);
-      setJob(jobData);
-    } catch (error) {
-      setJob(null);
-    }
-  };
-
-  useEffect(() => {
-    getJob();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [jobId]);
-
-  return { job, setJob, getJob };
+  return { jobs, loading, error, fetchJobs, addJob, editJob, removeJob };
 }

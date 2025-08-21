@@ -3,25 +3,62 @@ import axios from "axios";
 const API_URL = "https://localhost:44377/api";
 
 // Automatically attach JWT token to requests
-axios.interceptors.request.use((config) => {
-  const token = localStorage.getItem("token");
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`;
+axios.interceptors.response.use(
+  res => res,
+  async (error) => {
+    if (error.response?.status === 401) {
+      const refreshToken = localStorage.getItem("refreshToken");
+      const accessToken = localStorage.getItem("accessToken");
+
+      try {
+        const res = await axios.post("/auth/refresh", {
+          accessToken,
+          refreshToken
+        });
+
+        localStorage.setItem("accessToken", res.data.token);
+        localStorage.setItem("refreshToken", res.data.refreshToken);
+
+        error.config.headers["Authorization"] = `Bearer ${res.data.token}`;
+        return axios.request(error.config);
+      } catch (err) {
+        console.error("Refresh failed", err);
+      }
+    }
+    return Promise.reject(error);
   }
-  return config;
-});
+);
 
 export const login = async (email: string, password: string) => {
-  const response = fetch("https://localhost:44377/api/auth/login", {
-  method: "POST",
-  headers: {
-    "Content-Type": "application/json"
-  },
-  body: JSON.stringify({ email, password }),
-  credentials: "include" // <== This tells the browser to accept/set cookies
-});
-  return response; // Should contain token + user info
+  const response = await fetch("https://localhost:44377/api/auth/login", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ email, password }),
+    credentials: "include", // ensures cookies (refresh token) are included
+  });
+
+  if (!response.ok) {
+    throw new Error("Login failed");
+   
+  }
+
+  const data = await response.json();
+
+  // Store access token for immediate use
+  //console.log("Login response:", data);
+    //localStorage.setItem("token",  data.token);
+    localStorage.setItem("refreshToken",  data.refreshToken);
+    localStorage.setItem("user", JSON.stringify(data.user));
+
+    localStorage.setItem("accessToken", data.token);
+  
+
+  // Refresh token will be stored in HTTP-only cookie automatically by the server
+  return response;// includes accessToken and user info
 };
+
 
 export const signup = async (name: string, email: string, password: string, phoneNumber:string) => {
   const response = await axios.post(`${API_URL}/auth/register`, {

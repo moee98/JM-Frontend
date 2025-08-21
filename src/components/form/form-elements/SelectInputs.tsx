@@ -36,6 +36,7 @@ export default function SelectInputs() {
         </div>
         <div>
           <MultiSelect
+           
             label="Multiple Select Options"
             options={multiOptions}
             defaultSelected={["1", "3"]}

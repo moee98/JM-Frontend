@@ -1,5 +1,5 @@
 import type React from "react";
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 
 interface Option {
   value: string;
@@ -21,9 +21,36 @@ const MultiSelect: React.FC<MultiSelectProps> = ({
   onChange,
   disabled = false,
 }) => {
-  const [selectedOptions, setSelectedOptions] =
-    useState<string[]>(defaultSelected);
+  const [selectedOptions, setSelectedOptions] = useState<string[]>(defaultSelected);
   const [isOpen, setIsOpen] = useState(false);
+  const [inputHeight, setInputHeight] = useState(44); // base height (11 in Tailwind h-11)
+
+  const containerRef = useRef<HTMLDivElement>(null);
+  const selectedContainerRef = useRef<HTMLDivElement>(null);
+
+  // Close when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (
+        containerRef.current &&
+        !containerRef.current.contains(event.target as Node)
+      ) {
+        setIsOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, []);
+
+  // Adjust input height based on selected items
+  useEffect(() => {
+    if (selectedContainerRef.current) {
+      const newHeight = Math.max(44, selectedContainerRef.current.scrollHeight + 10);
+      setInputHeight(newHeight);
+    }
+  }, [selectedOptions]);
 
   const toggleDropdown = () => {
     if (!disabled) setIsOpen((prev) => !prev);
@@ -49,16 +76,27 @@ const MultiSelect: React.FC<MultiSelectProps> = ({
   );
 
   return (
-    <div className="w-full">
+    <div className="w-full" ref={containerRef}>
       <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-400">
         {label}
       </label>
 
       <div className="relative z-20 inline-block w-full">
         <div className="relative flex flex-col items-center">
-          <div onClick={toggleDropdown} className="w-full">
-            <div className="mb-2 flex h-11 rounded-lg border border-gray-300 py-1.5 pl-3 pr-3 shadow-theme-xs outline-hidden transition focus:border-brand-300 focus:shadow-focus-ring dark:border-gray-700 dark:bg-gray-900 dark:focus:border-brand-300">
-              <div className="flex flex-wrap flex-auto gap-2">
+          <div
+            onClick={() => {
+              if (!disabled) setIsOpen(true);
+            }}
+            className="w-full"
+          >
+            <div
+              style={{ minHeight: `${inputHeight}px` }}
+              className="mb-2 flex rounded-lg border border-gray-300 py-1.5 pl-3 pr-3 shadow-theme-xs outline-hidden transition-all duration-200 ease-in-out focus:border-brand-300 focus:shadow-focus-ring dark:border-gray-700 dark:bg-gray-900 dark:focus:border-brand-300"
+            >
+              <div
+                ref={selectedContainerRef}
+                className="flex flex-wrap flex-auto gap-2"
+              >
                 {selectedValuesText.length > 0 ? (
                   selectedValuesText.map((text, index) => (
                     <div
@@ -95,7 +133,7 @@ const MultiSelect: React.FC<MultiSelectProps> = ({
                 ) : (
                   <input
                     placeholder="Select option"
-                    className="w-full h-full p-1 pr-2 text-sm bg-transparent border-0 outline-hidden appearance-none placeholder:text-gray-800 focus:border-0 focus:outline-hidden focus:ring-0 dark:placeholder:text-white/90"
+                    className="w-full h-full p-1 pr-2 text-sm bg-transparent border-0 outline-hidden appearance-none group-hover:text-gray-400 dark:text-gray-400 focus:border-0 focus:outline-hidden focus:ring-0 dark:placeholder:text-white/90"
                     readOnly
                     value="Select option"
                   />
@@ -104,7 +142,10 @@ const MultiSelect: React.FC<MultiSelectProps> = ({
               <div className="flex items-center py-1 pl-1 pr-1 w-7">
                 <button
                   type="button"
-                  onClick={toggleDropdown}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    toggleDropdown();
+                  }}
                   className="w-5 h-5 text-gray-700 outline-hidden cursor-pointer focus:outline-hidden dark:text-gray-400"
                 >
                   <svg

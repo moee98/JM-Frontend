@@ -20,6 +20,9 @@ import Blank from "./pages/Blank";
 import AppLayout from "./layout/AppLayout";
 import { ScrollToTop } from "./components/common/ScrollToTop";
 import Home from "./pages/Dashboard/Home";
+import JobsTables from "./pages/Tables/JobsTable";
+import NewJobForm from "./pages/Forms/FormElements";
+import CreateJob from "./pages/Forms/CreateJob";
 
 const AppRoutes = () => (
   <Router>
@@ -38,7 +41,9 @@ const AppRoutes = () => (
         <Route path="/calendar" element={<Calendar />} />
         <Route path="/blank" element={<Blank />} />
         <Route path="/form-elements" element={<FormElements />} />
+        <Route path="/create-job" element={<CreateJob />} />
         <Route path="/basic-tables" element={<BasicTables />} />
+        <Route path="/jobs-tables" element={<JobsTables />} />
         <Route path="/alerts" element={<Alerts />} />
         <Route path="/avatars" element={<Avatars />} />
         <Route path="/badge" element={<Badges />} />

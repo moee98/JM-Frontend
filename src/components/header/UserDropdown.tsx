@@ -14,7 +14,7 @@ export const logout = () => {
 export default function UserDropdown() {
   const [isOpen, setIsOpen] = useState(false);
    const { user} = useCurrentUser();
-console.log(user);
+
   function toggleDropdown() {
     setIsOpen(!isOpen);
   }

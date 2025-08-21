@@ -20,24 +20,22 @@ export default function SignInForm() {
 const handleSubmit = async (e: React.FormEvent) => {
   e.preventDefault();
   try {
-    const response = await fetch("https://localhost:44377/api/auth/login", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ email, password }),
-    });
-
+    
+    if (!email || !password) {
+      setError("Email and password are required");
+      return;
+    }
+    const response = await login(email, password);
+    
     if (!response.ok) {
       setError("Invalid credentials");
       return;
     }
 
-    const data = await response.json();
+    const data = await response;
 
     // Save token and user info in localStorage or your preferred storage
-    localStorage.setItem("token", data.token);
-    localStorage.setItem("user", JSON.stringify(data.user));
+    
    
     window.location.href = "/"; // or use your router to redirect
 

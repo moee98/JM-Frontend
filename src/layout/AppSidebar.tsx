@@ -42,9 +42,18 @@ const navItems: NavItem[] = [
     path: "/profile",
   },
   {
-    name: "Forms",
+    name: "Jobs",
     icon: <ListIcon />,
-    subItems: [{ name: "Form Elements", path: "/form-elements", pro: false }],
+    subItems: [{ name: "Create new job", path: "/create-job", pro: false },
+      { name: "View all jobs", path: "/jobs-tables", pro: false }
+    ],
+  },
+  {
+    name: "Vehicles",
+    icon: <ListIcon />,
+    subItems: [{ name: "Add new vehicle", path: "/form-elements", pro: false },
+      { name: "View all vehicles", path: "/basic-tables", pro: false }
+    ],
   },
   {
     name: "Tables",
