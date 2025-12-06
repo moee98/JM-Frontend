@@ -8,13 +8,13 @@ export const getJobs = async (): Promise<Job[]> => {
   return res.data;
 };
 
-export const getJobById = async (id: string): Promise<Job> => {
+export const getJobById = async (id: number): Promise<Job> => {
   const res = await api.get<Job>(`/job/${id}`);
   return res.data;
 };
 
 
-export async function createJob(jobData: any) {
+export async function createJob(jobData: Job) {
   const res = await fetch(`${API_BASE}/job`, {
     method: "POST",
     headers: { "Content-Type": "application/json" ,

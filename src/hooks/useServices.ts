@@ -46,6 +46,9 @@ export const useCreateService = () => {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["services"] });
     },
+    onError: (error: any) => {
+      console.error("Error creating service:", error);
+    }
   });
 };
 

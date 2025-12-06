@@ -2,40 +2,162 @@ import { useState } from "react";
 import ComponentCard from "../../components/common/ComponentCard.tsx";
 import Label from "../../components/form/Label.tsx";
 import Input from "../../components/form/input/InputField.tsx";
-import Select from "../../components/form/Select.tsx";
-import RadioButtons from "../../components/form/form-elements/RadioButtons.tsx";
-import { EyeCloseIcon, EyeIcon, TimeIcon } from "../../icons/index.ts";
-import DatePicker from "../../components/form/date-picker.tsx";
 import { Vehicle } from "../../types/vehicle.tsx";
 
+export interface VehicleFormData {
+  registration: string;
+  make: string;
+  model: string;
+  colour: string;
+}
 
-export default function VehicleForm(Vehicle: { vehicle?: Vehicle }) {
-  
+interface VehicleFormProps {
+  onDataChange?: (data: VehicleFormData) => void;
+  initialData?: Partial<VehicleFormData>;
+  vehicle?: Vehicle;
+}
 
+interface ComponentCardProps {
+  title: string;
+  children: React.ReactNode;
+}
+
+interface LabelProps {
+  htmlFor?: string;
+  children: React.ReactNode;
+}
+
+interface InputProps {
+  type: string;
+  id: string;
+  placeholder?: string;
+  value?: string;
+  onChange?: (e: React.ChangeEvent<HTMLInputElement>) => void;
+}
+
+// Main VehicleForm Component
+export const VehicleForm: React.FC<VehicleFormProps> = ({ onDataChange, initialData = {} }) => {
+  const [registration, setRegistration] = useState<string>(initialData.registration || "");
+  const [make, setMake] = useState<string>(initialData.make || "");
+  const [model, setModel] = useState<string>(initialData.model || "");
+  const [colour, setColour] = useState<string>(initialData.colour || "");
+
+  const handleFieldChange = (
+    field: keyof VehicleFormData,
+    value: string
+  ): void => {
+    const updatedData: VehicleFormData = {
+      registration,
+      make,
+      model,
+      colour,
+      [field]: value,
+    };
+
+    // Update local state
+    switch (field) {
+      case "registration":
+        setRegistration(value);
+        break;
+      case "make":
+        setMake(value);
+        break;
+      case "model":
+        setModel(value);
+        break;
+      case "colour":
+        setColour(value);
+        break;
+    }
+
+    // Notify parent component
+    onDataChange?.(updatedData);
+  };
 
   return (
-    <ComponentCard title="Vehicle">
+   
       <div className="space-y-6">
-        
         <div>
-          <Label htmlFor="input">Vehicle Registration</Label>
-          <Input type="text" id="input" placeholder="KA24 PFM" />
-          
-        </div>
-         <div>
-          <Label htmlFor="input">Make</Label>
-          <Input type="text" id="input" placeholder="BMW" />
-        </div>
-         <div>
-          <Label htmlFor="input">Model</Label>
-          <Input type="text" id="input" placeholder="M4"/>
-        </div>
-         <div>
-          <Label htmlFor="input">Colour</Label>
-          <Input type="text" id="input" placeholder="Black"/>
-        </div>
+          <Label htmlFor="registration">Vehicle Registration</Label>
+          <Input
+            type="text"
+            id="registration"
+            placeholder="KA24 PFM"
+            value={registration}
+            onChange={(e) => handleFieldChange("registration", e.target.value)}
+          />
         </div>
 
-    </ComponentCard>
+        <div>
+          <Label htmlFor="make">Make</Label>
+          <Input
+            type="text"
+            id="make"
+            placeholder="BMW"
+            value={make}
+            onChange={(e) => handleFieldChange("make", e.target.value)}
+          />
+        </div>
+
+        <div>
+          <Label htmlFor="model">Model</Label>
+          <Input
+            type="text"
+            id="model"
+            placeholder="M4"
+            value={model}
+            onChange={(e) => handleFieldChange("model", e.target.value)}
+          />
+        </div>
+
+        <div>
+          <Label htmlFor="colour">Colour</Label>
+          <Input
+            type="text"
+            id="colour"
+            placeholder="Black"
+            value={colour}
+            onChange={(e) => handleFieldChange("colour", e.target.value)}
+          />
+        </div>
+      </div>
+    
+  );
+};
+
+// Export the component
+
+
+// Demo usage
+export default function App() {
+  const [vehicleData, setVehicleData] = useState<VehicleFormData>({
+    registration: "",
+    make: "",
+    model: "",
+    colour: "",
+  });
+
+  return (
+    <div className="min-h-screen bg-gray-100 dark:bg-gray-900 p-8">
+      <div className="max-w-2xl mx-auto">
+        <VehicleForm
+          onDataChange={setVehicleData}
+          initialData={{
+            registration: "",
+            make: "",
+            model: "",
+            colour: "",
+          }}
+        />
+
+        {/* Display collected data */}
+        <div className="mt-6 p-4 bg-white dark:bg-gray-800 rounded-lg shadow">
+          <h3 className="font-semibold mb-2">Collected Data:</h3>
+          <pre className="text-sm overflow-auto">
+            {JSON.stringify(vehicleData, null, 2)}
+          </pre>
+        </div>
+      </div>
+    </div>
   );
 }

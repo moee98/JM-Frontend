@@ -1,4 +1,5 @@
 import axios from "axios";
+import {User} from "../types/user";
 
 const API_URL = "https://localhost:44377/api";
 
@@ -70,22 +71,23 @@ export const signup = async (name: string, email: string, password: string, phon
   return response.data;
 };
 
-export const getCurrentUser = async () => {
-  const response =fetch("https://localhost:44377/api/users/me", {
-  method: "GET",
-  credentials: "include" ,// <== Send cookies along with the request
-  headers: {
-    "Content-Type": "application/json",
-    "Authorization": `Bearer ${localStorage.getItem("token")}`
+export const getCurrentUser = async (): Promise<User> => {
+  const response = await fetch("https://localhost:44377/api/users/me", {
+    method: "GET",
+    credentials: "include", // <== Send cookies along with the request
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": `Bearer ${localStorage.getItem("token")}`
+    }
+  });
+
+  if (!response.ok) {
+    throw new Error("Unauthorized");
   }
-})
-.then(response => {
-  if (!response.ok) throw new Error("Unauthorized");
-  return response.json();
-})
-.then(data => {
+
+  const data:User = await response.json();
   console.log("User data:", data);
-});
-  return response; // Expected: { id, name, email, ... }
+  
+  return data;
 };
 

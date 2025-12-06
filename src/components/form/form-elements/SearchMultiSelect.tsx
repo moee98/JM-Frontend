@@ -67,10 +67,9 @@ const SearchMultiSelect: React.FC<MultiSelectProps> = ({
     (value) => options.find((option) => option.value === value)?.text || ""
   );
 
-  // Filter options based on search
-  const filteredOptions = options.filter((option) =>
-    option.text.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+const filteredOptions = options.filter((option) =>
+  option?.text?.toLowerCase().includes(searchQuery.toLowerCase())
+);
 
   return (
     <div className="w-full" ref={containerRef}>

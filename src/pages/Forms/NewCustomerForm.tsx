@@ -7,65 +7,142 @@ import DatePicker from "../../components/form/date-picker.tsx";
 import Button from "../../components/ui/button/Button.tsx";
 import { Customer } from "../../types/customer.tsx";
 import PhoneInput from "../../components/form/group-input/PhoneInput.tsx";
-import {useCustomer, useCreateCustomer} from "../../hooks/useCustomer.ts";
+import { useCustomer, useCreateCustomer } from "../../hooks/useCustomer.ts";
 
 
+export interface NewCustomerFormData {
+  name: string;
+  email: string;
+  phone: string;
+} 
 
-export default function NewCustomerForm( ) {
+interface CustomerFormProps {
+  onDataChange?: (data: NewCustomerFormData) => void;
+  onCustomerCreated?: (customer: Customer) => void; // Add this prop
+  customer?: Customer;
+}
 
-  const handlePhoneNumberChange = (phoneNumber: string) => {
-    console.log("Updated phone number:", phoneNumber);
+
+export default function NewCustomerForm({ onDataChange, onCustomerCreated }: CustomerFormProps) {
+  const [name, setName] = useState<string>("");
+  const [email, setEmail] = useState<string>("");
+  const [phone, setPhone] = useState<string>("");
+
+  // Move the hook to the top level of the component
+  const createCustomerMutation = useCreateCustomer();
+
+  const handleFieldChange = (
+    field: keyof NewCustomerFormData,
+    value: string
+  ): void => {
+    const updatedData: NewCustomerFormData = {
+      name,
+      email,
+      phone,
+      [field]: value,
+    };
+
+    switch (field) {
+      case "name":
+        setName(value);
+        break;
+      case "email":
+        setEmail(value);
+        break;
+      case "phone":
+        setPhone(value);
+        break; 
+    }
+    onDataChange?.(updatedData);
   };
+
+  function createCustomer(data: NewCustomerFormData) {
+    const newCustomer: Customer = {
+      name: data.name,
+      email: data.email,
+      phoneNumber: data.phone,
+      address: "",
+      id: 0,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+
+    createCustomerMutation.mutate(newCustomer, {
+      onSuccess: (createdCustomer) => {
+        console.log("Customer created successfully:", createdCustomer);
+        // Clear form fields
+        setName("");
+        setEmail("");
+        setPhone("");
+        // Notify parent component
+        onCustomerCreated?.(newCustomer);
+      },
+      onError: (error) => {
+        console.error("Failed to create customer:", error);
+      }
+    });
+  }
 
   const handleSubmit = (event: React.FormEvent) => {
     event.preventDefault();
-    // Handle form submission logic here
-    console.log("Form submitted");
+    
+    console.log({ updatedData: { name, email, phone } });
+    createCustomer({ name, email, phone });
   } 
 
-const countries = [
-   
+  const countries = [
     { code: "GB", label: "+44" }
-   
   ];
 
   return (
-    <ComponentCard title="New Customer">
-        <form onSubmit={handleSubmit} className="space-y-6">
+    <form onSubmit={handleSubmit} className="space-y-6">
       <div className="space-y-6">
         <div>
           <Label htmlFor="input">Customer Name</Label>
-          <Input type="text" id="input" />
+          <Input 
+            type="text" 
+            id="input" 
+            value={name}
+            onChange={(e) => handleFieldChange("name", e.target.value)} 
+          />
         </div>
         
-        <Label>Email</Label>
+        <div>
+          <Label>Email</Label>
           <div className="relative">
             <Input
               placeholder="info@gmail.com"
-              type="text"
+              type="email"
               className="pl-[62px]"
+              value={email}
+              onChange={(e) => handleFieldChange("email", e.target.value)}
             />
             <span className="absolute left-0 top-1/2 -translate-y-1/2 border-r border-gray-200 px-3.5 py-3 text-gray-500 dark:border-gray-800 dark:text-gray-400">
               <EnvelopeIcon className="size-6" />
             </span>
           </div>
         </div>
+        
         <div>
           <Label>Phone</Label>
           <PhoneInput
             selectPosition="start"
             countries={countries}
             placeholder="+44"
-            onChange={handlePhoneNumberChange}
+           
+            onChange={(event) => handleFieldChange("phone", event.toString())}
           />
-        </div>{" "}
+        </div>
         
-        <Button className="w-full" size="sm" onClick={()=>handleSubmit}>
-                   Add Customer
+        <Button 
+          className="w-full" 
+          size="sm" 
+          onClick={()=>handleSubmit}
+          disabled={createCustomerMutation.isPending}
+        >
+          {createCustomerMutation.isPending ? "Adding..." : "Add Customer"}
         </Button>
-          
-        </form>
-    
-    </ComponentCard>
+      </div>
+    </form>
   );
 }

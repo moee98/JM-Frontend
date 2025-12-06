@@ -1,6 +1,22 @@
 // src/hooks/useJobs.ts
 import { useState, useEffect } from "react";
 import * as JobService from "../services/jobService";
+import { Job } from "../types/job";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+
+
+export function useCreateJob() {
+  const queryClient = useQueryClient();
+
+
+  return useMutation<Job, Error, Job>({
+    mutationFn: (job: Job) => JobService.createJob(job),
+    onSuccess: () => {
+      // Invalidate and refetch jobs list if you have a jobs query
+      queryClient.invalidateQueries({ queryKey: ["jobs"] });
+    },
+  });
+}
 
 export function useJobs() {
   const [jobs, setJobs] = useState<any[]>([]);
@@ -35,9 +51,19 @@ export function useJobs() {
     await fetchJobs();
   };
 
+  const getJobById = async (id: number): Promise<Job | null> => {
+    try {
+      const job = await JobService.getJobById(id);
+      return job;
+    } catch (err) {
+      setError("Failed to load job");
+      return null;
+    }
+  };
+
   useEffect(() => {
     fetchJobs();
   }, []);
 
-  return { jobs, loading, error, fetchJobs, addJob, editJob, removeJob };
+  return { jobs, loading, error, fetchJobs, addJob, editJob, removeJob, getJobById };
 }

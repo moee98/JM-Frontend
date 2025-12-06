@@ -46,6 +46,9 @@ export const useCreateCustomer = () => {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["customers"] });
     },
+    onError: (error) => {
+      console.error("Error creating customer:", error);
+    }
   });
 };
 
