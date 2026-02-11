@@ -1,25 +1,30 @@
 // src/hooks/useJobs.ts
 import { useState, useEffect } from "react";
 import * as JobService from "../services/jobService";
+import { getUserNameById } from "./useUsers";
 import { Job } from "../types/job";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient, useQuery } from "@tanstack/react-query";
 
-
+// ---------- CREATE JOB ----------
 export function useCreateJob() {
   const queryClient = useQueryClient();
-
 
   return useMutation<Job, Error, Job>({
     mutationFn: (job: Job) => JobService.createJob(job),
     onSuccess: () => {
+      console.log("Job created successfully");
       // Invalidate and refetch jobs list if you have a jobs query
       queryClient.invalidateQueries({ queryKey: ["jobs"] });
+    },
+    onError: (error: Error) => {
+      console.error("Error creating job:", error);
     },
   });
 }
 
+// ---------- LIST + BASIC JOB OPERATIONS ----------
 export function useJobs() {
-  const [jobs, setJobs] = useState<any[]>([]);
+  const [jobs, setJobs] = useState<Job[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -36,17 +41,17 @@ export function useJobs() {
     }
   };
 
-  const addJob = async (jobData: any) => {
+  const addJob = async (jobData: Job) => {
     await JobService.createJob(jobData);
     await fetchJobs(); // Refresh list after creation
   };
 
-  const editJob = async (id: string, jobData: any) => {
+  const editJob = async (id: number, jobData: Job) => {
     await JobService.updateJob(id, jobData);
     await fetchJobs();
   };
 
-  const removeJob = async (id: string) => {
+  const removeJob = async (id: number) => {
     await JobService.deleteJob(id);
     await fetchJobs();
   };
@@ -54,6 +59,13 @@ export function useJobs() {
   const getJobById = async (id: number): Promise<Job | null> => {
     try {
       const job = await JobService.getJobById(id);
+      if(!job) {
+        setError("Job not found");
+        return null;
+      }
+      const createdBy = await getUserNameById(job.appUserId || "");
+      if(createdBy)
+      job.createdBy = createdBy;
       return job;
     } catch (err) {
       setError("Failed to load job");
@@ -66,4 +78,19 @@ export function useJobs() {
   }, []);
 
   return { jobs, loading, error, fetchJobs, addJob, editJob, removeJob, getJobById };
+}
+
+// ---------- SINGLE JOB VIA REACT QUERY ----------
+export  function useJob(id?: number) {
+  return useQuery<Job, Error>({
+    queryKey: ["Job", id],
+    enabled: id != null,
+    queryFn: () => {
+      console.log("Fetching job with id:", id);
+      if (id == null) {
+        throw new Error("No job id provided");
+      }
+      return  JobService.getJob(id);
+    },
+  });
 }

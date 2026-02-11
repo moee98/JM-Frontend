@@ -1,7 +1,7 @@
 import axios from "axios";
 import {User} from "../types/user";
 
-const API_URL = "https://localhost:44377/api";
+const API_URL = "/api";
 
 // Automatically attach JWT token to requests
 axios.interceptors.response.use(
@@ -31,7 +31,7 @@ axios.interceptors.response.use(
 );
 
 export const login = async (email: string, password: string) => {
-  const response = await fetch("https://localhost:44377/api/auth/login", {
+  const response = await fetch("/api/auth/login", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -51,7 +51,7 @@ export const login = async (email: string, password: string) => {
   //console.log("Login response:", data);
     //localStorage.setItem("token",  data.token);
     localStorage.setItem("refreshToken",  data.refreshToken);
-    localStorage.setItem("user", JSON.stringify(data.user));
+    localStorage.setItem("user", JSON.stringify(data.user.id));
 
     localStorage.setItem("accessToken", data.token);
   
@@ -72,7 +72,7 @@ export const signup = async (name: string, email: string, password: string, phon
 };
 
 export const getCurrentUser = async (): Promise<User> => {
-  const response = await fetch("https://localhost:44377/api/users/me", {
+  const response = await fetch("/api/users/me", {
     method: "GET",
     credentials: "include", // <== Send cookies along with the request
     headers: {

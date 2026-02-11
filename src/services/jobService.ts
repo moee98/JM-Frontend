@@ -1,7 +1,7 @@
 // src/services/JobService.ts
-const API_BASE = "https://localhost:44377/api";
-import api from "./apiService"; // Assuming you have an axios instance set up
-import {Job } from "../types/job";
+
+import api from "./apiService";
+import type { Job } from "../types/job";
 
 export const getJobs = async (): Promise<Job[]> => {
   const res = await api.get<Job[]>("/job");
@@ -13,53 +13,20 @@ export const getJobById = async (id: number): Promise<Job> => {
   return res.data;
 };
 
+// If you want to keep a `getJob` alias:
+export const getJob = getJobById;
 
-export async function createJob(jobData: Job) {
-  const res = await fetch(`${API_BASE}/job`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" ,
-         "Authorization": `Bearer ${localStorage.getItem("accessToken")}` // Include token if needed
-    },
-    credentials: "include",
-    body: JSON.stringify(jobData),
-  });
+export const createJob = async (jobData: Job): Promise<Job> => {
+  const res = await api.post<Job>("/job", jobData);
+  return res.data;
+};
 
-  if (!res.ok) {
-    throw new Error("Failed to create job");
-  }
+// Prefer number id if your API expects number
+export const updateJob = async (id: number, jobData: Partial<Job>): Promise<Job> => {
+  const res = await api.put<Job>(`/job/${id}`, jobData);
+  return res.data;
+};
 
-  return res.json();
-}
-
-export async function updateJob(id: string, jobData: any) {
-  const res = await fetch(`${API_BASE}/jobs/${id}`, {
-    method: "PUT",
-    headers: { "Content-Type": "application/json",
-         "Authorization": `Bearer ${localStorage.getItem("token")}`
-     },
-    credentials: "include",
-    body: JSON.stringify(jobData),
-  });
-
-  if (!res.ok) {
-    throw new Error("Failed to update job");
-  }
-
-  return res.json();
-}
-
-export async function deleteJob(id: string) {
-  const res = await fetch(`${API_BASE}/jobs/${id}`, {
-    method: "DELETE",
-    credentials: "include",
-    headers: { "Content-Type": "application/json",
-         "Authorization": `Bearer ${localStorage.getItem("token")}`
-    }
-  });
-
-  if (!res.ok) {
-    throw new Error("Failed to delete job");
-  }
-
-  return true;
-}
+export const deleteJob = async (id: number): Promise<void> => {
+  await api.delete<void>(`/job/${id}`);
+};

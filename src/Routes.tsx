@@ -24,6 +24,10 @@ import JobsTables from "./pages/Tables/JobsTable";
 import NewJobForm from "./pages/Forms/FormElements";
 import CreateJob from "./pages/Forms/CreateJob";
 import ViewJobPage from "./pages/Jobs/ViewJob";
+import ViewJobTemplate from "./pages/Jobs/ViewJobTemplate";
+import  CreateJobPage  from "./pages/Jobs/CreateJobTemplate";
+import VehicleInspectionFormPage from "./pages/Jobs/VehicleInspection";
+import InvoicePage from "./pages/Jobs/Invoice";
 
 const AppRoutes = () => (
   <Router>
@@ -44,6 +48,16 @@ const AppRoutes = () => (
         <Route path="/form-elements" element={<FormElements />} />
         <Route path="/create-job" element={<CreateJob />} />
         <Route path="/view-job/:jobId" element={<ViewJobPage />} />
+        <Route path="/view-job-template/:jobId" element={<ViewJobTemplate />} />
+        <Route path="/create-job-template" element={<CreateJobPage />} />
+        <Route path="/invoice/:jobId" element={<InvoicePage />} />
+        <Route
+        path="/jobs/:jobId/inspection/new"
+        element={
+          <VehicleInspectionFormPage/>}
+          
+        
+      />
         <Route path="/basic-tables" element={<BasicTables />} />
         <Route path="/jobs-tables" element={<JobsTables />} />
         <Route path="/alerts" element={<Alerts />} />

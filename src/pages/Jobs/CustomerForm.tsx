@@ -1,7 +1,7 @@
 import { useState } from "react";
 import RadioButtons from "../../components/form/form-elements/RadioButtons.tsx";
 import { Customer } from "../../types/customer.tsx";
-import NewCustomerForm from "./NewCustomerForm.tsx";
+import NewCustomerForm from "../Forms/NewCustomerForm.tsx";
 import SearchSelect from "../../components/form/form-elements/SearchSelect.tsx";
 import { useCustomer } from "../../hooks/useCustomer.ts";
 

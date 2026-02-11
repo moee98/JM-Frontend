@@ -2,8 +2,54 @@
 layer(base);
 
 @import "tailwindcss";
+@layer base {
+  .font-sans {
+    font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont,
+      "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+}
 
 @custom-variant dark (&:is(.dark *));
+@custom-variant print (&:is(@media print *));
+@media print {
+    body {
+      background: white;
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+    }
+
+    .no-print {
+      display: none !important;
+    }
+
+    /* Invoice container */
+    .invoice-print {
+      box-shadow: none !important;
+      border-radius: 0 !important;
+
+      /* 🔑 This is the key part */
+      padding: 16mm !important;
+
+      transform: scale(0.8);
+      transform-origin: top left;
+      width: 125%;
+    }
+
+    /* Tables behave better in print */
+    table {
+      border-collapse: collapse !important;
+    }
+
+    th, td {
+      page-break-inside: avoid;
+    }
+
+    /* Prevent awkward page breaks */
+    .invoice-print > * {
+      page-break-inside: avoid;
+    }
+  }
+
 
 @theme {
   --font-*: initial;

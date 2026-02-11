@@ -1,57 +1,93 @@
-import axios, { AxiosInstance, AxiosRequestConfig, AxiosResponse } from "axios";
+import axios, {
+  AxiosError,
+  AxiosInstance,
+  AxiosRequestConfig,
+  AxiosResponse,
+  InternalAxiosRequestConfig,
+} from "axios";
+
+type TokenPair = { accessToken: string; refreshToken: string };
+
+type RetriableConfig = InternalAxiosRequestConfig & {
+  _retry?: boolean;
+};
 
 class ApiService {
   private instance: AxiosInstance;
-  private isRefreshing: boolean = false;
-  private refreshSubscribers: ((token: string) => void)[] = [];
+  private isRefreshing = false;
+
+  // store both resolve+reject so we can fail queued requests
+  private refreshSubscribers: Array<{
+    resolve: (token: string) => void;
+    reject: (err: any) => void;
+  }> = [];
 
   constructor(baseURL: string) {
     this.instance = axios.create({
       baseURL,
       headers: { "Content-Type": "application/json" },
+       withCredentials: true,
     });
 
     // Attach token before requests
     this.instance.interceptors.request.use((config) => {
       const token = localStorage.getItem("accessToken");
-      if (token) {
-        config.headers.Authorization = `Bearer ${token}`;
-      } else {
-        console.warn("No access token found");
-      }
+      config.headers = config.headers ?? {};
+
+      // Optional: don’t attach Authorization to refresh endpoint if you call it via this.instance
+      // if (config.url?.includes("/auth/refresh")) return config;
+
+      if (token) config.headers.Authorization = `Bearer ${token}`;
       return config;
     });
 
-    // Handle 401s and refresh token flow
     this.instance.interceptors.response.use(
       (response) => response,
-      async (error) => {
-        const originalRequest = error.config;
+      async (error: AxiosError) => {
+        const originalRequest = error.config as RetriableConfig | undefined;
 
-        // If 401 and not already trying to refresh
-        if (error.response?.status === 401 && !originalRequest._retry) {
+        // If we don’t have a request config, nothing to retry
+        if (!originalRequest) return Promise.reject(error);
+
+        const status = error.response?.status;
+
+        // Don’t try to refresh if the refresh endpoint itself 401s
+        if (originalRequest.url?.includes("/auth/refresh")) {
+          this.clearTokens();
+          return Promise.reject(error);
+        }
+
+        if (status === 401 && !originalRequest._retry) {
           originalRequest._retry = true;
-
-          // Wait for ongoing refresh if needed
+          
+          // If refresh is in-flight, queue this request
           if (this.isRefreshing) {
-            return new Promise((resolve) => {
-              this.subscribeTokenRefresh((token) => {
-                originalRequest.headers.Authorization = `Bearer ${token}`;
-                resolve(this.instance(originalRequest));
-              });
+            return new Promise((resolve, reject) => {
+              this.subscribeTokenRefresh(
+                (token) => {
+                  originalRequest.headers = originalRequest.headers ?? {};
+                  originalRequest.headers.Authorization = `Bearer ${token}`;
+                  resolve(this.instance(originalRequest));
+                },
+                reject
+              );
             });
           }
 
           this.isRefreshing = true;
+
           try {
-            const newTokens = await this.refreshToken();
-            this.onRereshSuccess(newTokens.accessToken);
-            originalRequest.headers.Authorization = `Bearer ${newTokens.accessToken}`;
+            const tokens = await this.refreshToken();
+
+            this.onRefreshSuccess(tokens.accessToken);
+
+            originalRequest.headers = originalRequest.headers ?? {};
+            originalRequest.headers.Authorization = `Bearer ${tokens.accessToken}`;
+
             return this.instance(originalRequest);
           } catch (refreshErr) {
-            console.error("Refresh token failed", refreshErr);
+            this.onRefreshFailure(refreshErr);
             this.clearTokens();
-           // window.location.href = "/signin";
             return Promise.reject(refreshErr);
           } finally {
             this.isRefreshing = false;
@@ -63,20 +99,46 @@ class ApiService {
     );
   }
 
-  // Refresh token API call
-  private async refreshToken(): Promise<{ accessToken: string; refreshToken: string }> {
+  private subscribeTokenRefresh(
+    resolve: (token: string) => void,
+    reject: (err: any) => void
+  ) {
+    this.refreshSubscribers.push({ resolve, reject });
+  }
+
+  private onRefreshSuccess(token: string) {
+    this.refreshSubscribers.forEach((s) => s.resolve(token));
+    this.refreshSubscribers = [];
+  }
+
+  private onRefreshFailure(err: any) {
+    this.refreshSubscribers.forEach((s) => s.reject(err));
+    this.refreshSubscribers = [];
+  }
+
+  private async refreshToken(): Promise<TokenPair> {
     const accessToken = localStorage.getItem("accessToken");
     const refreshToken = localStorage.getItem("refreshToken");
 
     if (!refreshToken) throw new Error("No refresh token");
 
-    const response = await axios.post(
-      `${import.meta.env.VITE_API_URL || "https://localhost:44377/api"}/auth/refresh`,
-      { accessToken, refreshToken }
+    // Safer: use same baseURL as instance
+    const response = await this.instance.post(
+      "/auth/refresh",
+      { accessToken, refreshToken },
+      {
+        // If your server uses cookies for refresh:
+        // withCredentials: true,
+      }
     );
 
-    const newAccessToken = response.data.token;
-    const newRefreshToken = response.data.refreshToken;
+    // ✅ Adjust these names to match your API response EXACTLY
+    const newAccessToken = (response.data as any).accessToken ?? (response.data as any).token;
+    const newRefreshToken = (response.data as any).refreshToken;
+
+    if (!newAccessToken || !newRefreshToken) {
+      throw new Error("Refresh response missing tokens");
+    }
 
     localStorage.setItem("accessToken", newAccessToken);
     localStorage.setItem("refreshToken", newRefreshToken);
@@ -84,21 +146,12 @@ class ApiService {
     return { accessToken: newAccessToken, refreshToken: newRefreshToken };
   }
 
-  // For queued requests while refreshing
-  private subscribeTokenRefresh(cb: (token: string) => void) {
-    this.refreshSubscribers.push(cb);
-  }
-  private onRereshSuccess(token: string) {
-    this.refreshSubscribers.forEach((cb) => cb(token));
-    this.refreshSubscribers = [];
-  }
-
   private clearTokens() {
     localStorage.removeItem("accessToken");
     localStorage.removeItem("refreshToken");
   }
 
-  // CRUD methods
+  // CRUD
   get<T>(url: string, config?: AxiosRequestConfig): Promise<AxiosResponse<T>> {
     return this.instance.get<T>(url, config);
   }
@@ -116,6 +169,5 @@ class ApiService {
   }
 }
 
-// Export instance
-const api = new ApiService(import.meta.env.VITE_API_URL || "https://localhost:44377/api");
+const api = new ApiService("/api");
 export default api;

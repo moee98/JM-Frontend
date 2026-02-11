@@ -1,6 +1,9 @@
+import { Service } from "./service";
 export interface JobService {
-  Id: number;
-  JobId: number;
-    ServiceId: number;
-    Price: number;
+  id: number;
+  jobId: number;
+    serviceId: number;
+    price: number;
+    completed: boolean;
+    service?:Service;
 }

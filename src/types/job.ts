@@ -1,7 +1,7 @@
 import { Vehicle } from "./vehicle";
 import { User } from "./user";
 import { Customer } from "./customer";
-import { Service } from "./service";;
+import { Service } from "./service";
 import { JobService } from "./jobService";
 
 export interface Job {
@@ -9,21 +9,22 @@ export interface Job {
   customerId?: number;
   vehicleId?: number;
   description?: string;
-  status: string ;
+  status?: string ;
   assignedTo?: string; // mechanic or technician ID
-  dueDate: string; // ISO date
-  createdAt: string;     // ISO timestamp
+  dueDate?: string; // ISO date
+  createdAt?: string;     // ISO timestamp
   updatedAt?: string;
-  ServiceCharge?: number;
+  serviceCharge?: number;
   invoiceId?: string;
   notes?: string; // additional notes or instructions
   isActive?: boolean; // flag to indicate if the job is active
   paymentMethod?: string; // payment method used
-  paid ?: boolean; // flag to indicate if the job has been paid
+  paid : boolean ; // flag to indicate if the job has been paid
   vehicle?: Vehicle; // associated vehicle details
-  User?: User; // associated customer details
-  Customer? : Customer; // associated customer details
+  appUserId?: string; // associated customer details
+  createdBy?: string;
+  customer? : Customer; // associated customer details
   Services?: Service[]; // associated services for the job
-  JobServices?: JobService[]; // associated job services for the job
+  jobServices?: JobService[]; // associated job services for the job
 
 }

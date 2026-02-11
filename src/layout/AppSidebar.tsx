@@ -29,7 +29,7 @@ const navItems: NavItem[] = [
   {
     icon: <GridIcon />,
     name: "Dashboard",
-    subItems: [{ name: "Ecommerce", path: "/", pro: false }],
+     path: "/",
   },
   {
     icon: <CalenderIcon />,
@@ -48,26 +48,26 @@ const navItems: NavItem[] = [
       { name: "View all jobs", path: "/jobs-tables", pro: false }
     ],
   },
-  {
-    name: "Vehicles",
-    icon: <ListIcon />,
-    subItems: [{ name: "Add new vehicle", path: "/form-elements", pro: false },
-      { name: "View all vehicles", path: "/basic-tables", pro: false }
-    ],
-  },
-  {
-    name: "Tables",
-    icon: <TableIcon />,
-    subItems: [{ name: "Basic Tables", path: "/basic-tables", pro: false }],
-  },
-  {
-    name: "Pages",
-    icon: <PageIcon />,
-    subItems: [
-      { name: "Blank Page", path: "/blank", pro: false },
-      { name: "404 Error", path: "/error-404", pro: false },
-    ],
-  },
+  // {
+  //   name: "Vehicles",
+  //   icon: <ListIcon />,
+  //   subItems: [{ name: "Add new vehicle", path: "/form-elements", pro: false },
+  //     { name: "View all vehicles", path: "/basic-tables", pro: false }
+  //   ],
+  // },
+  // {
+  //   name: "Tables",
+  //   icon: <TableIcon />,
+  //   subItems: [{ name: "Basic Tables", path: "/basic-tables", pro: false }],
+  // },
+  // {
+  //   name: "Pages",
+  //   icon: <PageIcon />,
+  //   subItems: [
+  //     { name: "Blank Page", path: "/blank", pro: false },
+  //     { name: "404 Error", path: "/error-404", pro: false },
+  //   ],
+  // },
 ];
 
 const othersItems: NavItem[] = [
@@ -313,31 +313,33 @@ const AppSidebar: React.FC = () => {
         }`}
       >
         <Link to="/">
-          {isExpanded || isHovered || isMobileOpen ? (
+          {isExpanded || isHovered   ? (
             <>
               <img
                 className="dark:hidden"
-                src="/images/logo/logo.svg"
+                src="/images/logo/logo.png"
                 alt="Logo"
                 width={150}
                 height={40}
               />
               <img
                 className="hidden dark:block"
-                src="/images/logo/logo-dark.svg"
+                src="/images/logo/logo.png"
                 alt="Logo"
                 width={150}
                 height={40}
               />
             </>
-          ) : (
+          ) : !isMobileOpen ? (
             <img
-              src="/images/logo/logo-icon.svg"
+              src="/images/logo/logo-icon-md.png"
               alt="Logo"
               width={32}
               height={32}
             />
-          )}
+          ): null 
+          
+           }
         </Link>
       </div>
       <div className="flex flex-col overflow-y-auto duration-300 ease-linear no-scrollbar">
@@ -359,7 +361,7 @@ const AppSidebar: React.FC = () => {
               </h2>
               {renderMenuItems(navItems, "main")}
             </div>
-            <div className="">
+            {/* <div className="">
               <h2
                 className={`mb-4 text-xs uppercase flex leading-[20px] text-gray-400 ${
                   !isExpanded && !isHovered
@@ -374,8 +376,8 @@ const AppSidebar: React.FC = () => {
                 )}
               </h2>
               {renderMenuItems(othersItems, "others")}
-            </div>
-          </div>
+            </div>*/}
+          </div> 
         </nav>
        
       </div>
