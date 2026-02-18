@@ -28,6 +28,9 @@ import ViewJobTemplate from "./pages/Jobs/ViewJobTemplate";
 import  CreateJobPage  from "./pages/Jobs/CreateJobTemplate";
 import VehicleInspectionFormPage from "./pages/Jobs/VehicleInspection";
 import InvoicePage from "./pages/Jobs/Invoice";
+import EditJobPage from "./pages/Jobs/EditJob";
+import AddExpensePage from "./pages/Expenses/AddExpense";
+import ExpenseReportsPage from "./pages/Expenses/ExpenseReports";
 
 const AppRoutes = () => (
   <Router>
@@ -51,6 +54,10 @@ const AppRoutes = () => (
         <Route path="/view-job-template/:jobId" element={<ViewJobTemplate />} />
         <Route path="/create-job-template" element={<CreateJobPage />} />
         <Route path="/invoice/:jobId" element={<InvoicePage />} />
+        <Route path="/jobs/:jobId/edit" element={<EditJobPage />} />
+        <Route path="/edit-job/:jobId" element={<EditJobPage />} />
+        <Route path="/expenses/add" element={<AddExpensePage />} />
+        <Route path="/expenses/reports" element={<ExpenseReportsPage />} />
         <Route
         path="/jobs/:jobId/inspection/new"
         element={

@@ -158,32 +158,28 @@ console.log("Invoice job:", job);
     return { subtotal, vatAmount, total };
   }, [invoice.lines, invoice.vatRate]);
 
-
-
-  
-
     // ---------- NOT FOUND ----------
-  // if (!job) {
-  //   return (
-  //     <div className="bg-gray-50 flex items-center justify-center p-6">
-  //       <div className="bg-white rounded-lg shadow-sm p-8 max-w-md w-full text-center">
-  //         <AlertCircle className="w-16 h-16 text-yellow-500 mx-auto mb-4" />
-  //         <h2 className="text-xl font-semibold text-gray-900 mb-2">
-  //           Job Not Found
-  //         </h2>
-  //         <p className="text-gray-600 mb-4">
-  //           The job you're looking for doesn't exist.
-  //         </p>
-  //         <button
-  //           onClick={() => navigate("/jobs")}
-  //           className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-  //         >
-  //           Back to Jobs
-  //         </button>
-  //       </div>
-  //     </div>
-  //   );
-  // } 
+  if (!job) {
+    return (
+      <div className="bg-gray-50 flex items-center justify-center p-6">
+        <div className="bg-white rounded-lg shadow-sm p-8 max-w-md w-full text-center">
+          <AlertCircle className="w-16 h-16 text-yellow-500 mx-auto mb-4" />
+          <h2 className="text-xl font-semibold text-gray-900 mb-2">
+            Job Not Found
+          </h2>
+          <p className="text-gray-600 mb-4">
+            The job you're looking for doesn't exist.
+          </p>
+          <button
+            onClick={() => navigate("/jobs")}
+            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+          >
+            Back to Jobs
+          </button>
+        </div>
+      </div>
+    );
+  } 
 
   return (
  

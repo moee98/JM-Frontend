@@ -16,12 +16,12 @@ import ComponentCard from "../../components/common/ComponentCard";
 
 import { useJob } from "../../hooks/useJobs";
 import {getUserNameById} from "../../hooks/useUsers";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import PaymentMethodsCard, { PaymentPayload } from "../Forms/PaymentMethod";
+import JobStatusDropdown, { JobStatus } from "../../components/jobs/JobStatusDropdown";
+import { updateJob as updateJobRequest } from "../../services/jobService";
 import { Job } from "../../types/job";
-import { useQuery } from "@tanstack/react-query";
-import Button from "../../components/ui/button/Button";
-import PaymentMethodsCard from "../Forms/PaymentMethod";
-import Select from "../../components/form/Select";
-import Label from "../../components/form/Label";
+import { PaymentMethodType } from "../../types/payment";
 
 // ---- Local types for payment UI ----
 type SplitPaymentPart = {
@@ -42,9 +42,8 @@ export default function ViewJobPage() {
 
   const id = jobId ? Number(jobId) : undefined;
 
-const { data:job, isLoading, isError, error } = useJob(id!);
-
-
+  const queryClient = useQueryClient();
+  const { data:job, isLoading, isError, error } = useJob(id!);
 
   const { data: userName } = useQuery({
     queryKey: ["userName", job?.appUserId],
@@ -82,6 +81,11 @@ const { data:job, isLoading, isError, error } = useJob(id!);
           (sum, js) => sum + (js.price ?? 0),
           0
         );
+  const servicesTotalPence =
+    job?.serviceCharge ??
+    Math.round(
+      (job?.jobServices ?? []).reduce((sum, js) => sum + ((js.price ?? 0) * 100), 0)
+    );
 
    const round2 = (n: number) => Math.round(n * 100) / 100;
 
@@ -176,22 +180,55 @@ const addPaymentPart = () => {
   });
 };
 
+  const normalizeJobStatus = (status?: string): JobStatus => {
+    if (!status) return "Pending";
+
+    switch (status) {
+      case "In Progress":
+        return "In_Progress";
+      case "Pending":
+      case "In_Progress":
+      case "Completed":
+      case "Cancelled":
+        return status;
+      default:
+        return "Pending";
+    }
+  };
+
+  const getStatusLabel = (status: JobStatus) => {
+    return status === "In_Progress" ? "In Progress" : status;
+  };
+  const normalizePaymentMethod = (method?: string): PaymentMethodType => {
+    switch (method) {
+      case "cash":
+      case "card":
+      case "bank-transfer":
+      case "online":
+      case "split":
+        return method;
+      default:
+        return "";
+    }
+  };
+
   const getStatusColor = (status?: string) => {
     switch (status) {
       case "Completed":
-        return "bg-green-100 text-green-800 border-green-200";
+        return "bg-green-100 text-green-800 border-green-200 dark:bg-success-500/15 dark:text-success-400 dark:border-success-500/30";
+      case "In_Progress":
       case "In Progress":
-        return "bg-blue-100 text-blue-800 border-blue-200";
+        return "bg-blue-100 text-blue-800 border-blue-200 dark:bg-brand-500/15 dark:text-brand-300 dark:border-brand-500/30";
       case "Pending":
-        return "bg-yellow-100 text-yellow-800 border-yellow-200";
+        return "bg-yellow-100 text-yellow-800 border-yellow-200 dark:bg-warning-500/15 dark:text-warning-300 dark:border-warning-500/30";
       case "Cancelled":
-        return "bg-red-100 text-red-800 border-red-200";
+        return "bg-red-100 text-red-800 border-red-200 dark:bg-error-500/15 dark:text-error-300 dark:border-error-500/30";
       case "true":
-        return "bg-green-100 text-green-800 border-green-200";
+        return "bg-green-100 text-green-800 border-green-200 dark:bg-success-500/15 dark:text-success-400 dark:border-success-500/30";
       case "false":
-        return "bg-red-100 text-red-800 border-red-200";
+        return "bg-red-100 text-red-800 border-red-200 dark:bg-error-500/15 dark:text-error-300 dark:border-error-500/30";
       default:
-        return "bg-gray-100 text-gray-800 border-gray-200";
+        return "bg-gray-100 text-gray-800 border-gray-200 dark:bg-gray-800 dark:text-gray-300 dark:border-gray-700";
     }
   };
 
@@ -199,6 +236,7 @@ const addPaymentPart = () => {
     switch (status) {
       case "Completed":
         return <CheckCircle className="w-5 h-5" />;
+      case "In_Progress":
       case "In Progress":
         return <Clock className="w-5 h-5" />;
       case "Pending":
@@ -209,17 +247,6 @@ const addPaymentPart = () => {
         return null;
     }
   };
-
-  interface SelectOption {
-  value: 'Pending' | 'In_Progress' | 'Completed' | 'Cancelled' ;
-  label: string;
-}
- const statusOptions: SelectOption[] = [
-    { value: "Pending", label: "Pending" },
-    { value: "In_Progress", label: "In Progress" },
-    { value: "Completed", label: "Completed" },
-    { value: "Cancelled", label: "Cancelled" },
-  ];
 
   const formatDate = (iso?: string) => {
     if (!iso) return "N/A";
@@ -233,15 +260,67 @@ const addPaymentPart = () => {
       
     });
   };
+  const [selectedStatus, setSelectedStatus] = useState<JobStatus>("Pending");
+  const [statusUpdateError, setStatusUpdateError] = useState<string | null>(null);
 
-  const handleStatusChange = (newStatus: string): void => {
-    setStatus(newStatus);
-    // api logic to update status here
+  useEffect(() => {
+    if (!job?.status) return;
+    setSelectedStatus(normalizeJobStatus(job.status));
+  }, [job?.status]);
+
+  const updateStatusMutation = useMutation({
+    mutationFn: (updatedJob: Job) => updateJobRequest(id!, updatedJob),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["Job", id] });
+    },
+  });
+  const updatePaymentMutation = useMutation({
+    mutationFn: (updatedJob: Job) => updateJobRequest(id!, updatedJob),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["Job", id] });
+    },
+  });
+
+  const handleStatusChange = async (newStatus: JobStatus) => {
+    const previousStatus = selectedStatus;
+    setStatusUpdateError(null);
+    setSelectedStatus(newStatus);
+
+    try {
+      if (!job) throw new Error("Job data is not loaded yet.");
+      const updatedJob: Job = {
+        ...job,
+        status: newStatus,
+      };
+
+      await updateStatusMutation.mutateAsync(updatedJob);
+    } catch (err) {
+      setSelectedStatus(previousStatus);
+      setStatusUpdateError("Failed to update job status.");
+      console.error(err);
+    }
   };
-  const formatMoneyFromPenceString = (value?: number) => {
-    if (!value || Number.isNaN(value)) return "£0.00";
-    return `£${(value / 100).toFixed(2)}`;
+  const handlePaymentSubmit = async (payload: PaymentPayload) => {
+    if (!job) throw new Error("Job data is not loaded yet.");
+
+    const paymentMethods = payload.isPaid ? payload.paymentMethods : [];
+    const primaryPaymentMethod =
+      paymentMethods.length > 1
+        ? "split"
+        : paymentMethods.length === 1
+        ? paymentMethods[0].MethodName
+        : "";
+
+    const updatedJob: Job = {
+      ...job,
+      paid: payload.isPaid,
+      paymentMethod: primaryPaymentMethod,
+      paymentMethods,
+    };
+
+    await updatePaymentMutation.mutateAsync(updatedJob);
   };
+  
 const formatMoneyFromPence = (value?: number) => {
     if (!value || Number.isNaN(value)) return 0.00;
     return (value / 100).toFixed(2);
@@ -253,32 +332,13 @@ const formatMoneyFromPence = (value?: number) => {
   console.log(serviceId, completed);
 };
 
-const [status, setStatus] = useState("");
-
-  const statuses = [
-    "Pending",
-    "In Progress",
-    "Completed",
-    "Cancelled"
-  ];
-
-  const handleChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const newStatus = e.target.value;
-    setStatus(newStatus);
-
-    // Call your API / update logic here
-    console.log("Status updated to:", newStatus);
-  };
-
-
-
   // ---------- LOADING ----------
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <p className="text-gray-600">Loading job details...</p>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 dark:border-brand-400 mx-auto mb-4"></div>
+          <p className="text-gray-600 dark:text-gray-300">Loading job details...</p>
         </div>
       </div>
     );
@@ -287,13 +347,13 @@ const [status, setStatus] = useState("");
   // ---------- ERROR ----------
   if (isError || !id) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-6">
-        <div className="bg-white rounded-lg shadow-sm p-8 max-w-md w-full text-center">
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center p-6">
+        <div className="bg-white dark:bg-gray-900 rounded-lg shadow-sm p-8 max-w-md w-full text-center border border-gray-200 dark:border-gray-800">
           <XCircle className="w-16 h-16 text-red-500 mx-auto mb-4" />
-          <h2 className="text-xl font-semibold text-gray-900 mb-2">
+          <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">
             Error Loading Job
           </h2>
-          <p className="text-gray-600 mb-4">
+          <p className="text-gray-600 dark:text-gray-300 mb-4">
             {error?.message || "Failed to load job details."}
           </p>
           <button
@@ -310,13 +370,13 @@ const [status, setStatus] = useState("");
   // ---------- NOT FOUND ----------
   if (!job) {
     return (
-      <div className="bg-gray-50 flex items-center justify-center p-6">
-        <div className="bg-white rounded-lg shadow-sm p-8 max-w-md w-full text-center">
+      <div className="bg-gray-50 dark:bg-gray-900 flex items-center justify-center p-6">
+        <div className="bg-white dark:bg-gray-900 rounded-lg shadow-sm p-8 max-w-md w-full text-center border border-gray-200 dark:border-gray-800">
           <AlertCircle className="w-16 h-16 text-yellow-500 mx-auto mb-4" />
-          <h2 className="text-xl font-semibold text-gray-900 mb-2">
+          <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">
             Job Not Found
           </h2>
-          <p className="text-gray-600 mb-4">
+          <p className="text-gray-600 dark:text-gray-300 mb-4">
             The job you're looking for doesn't exist.
           </p>
           <button
@@ -352,7 +412,7 @@ const [status, setStatus] = useState("");
             <div className="mb-6">
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                 <div>
-                  <h1 className="text-3xl font-bold text-gray-900 mb-2">
+                  <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">
                     Job #{job.id}
                   </h1>
                   
@@ -385,29 +445,29 @@ const [status, setStatus] = useState("");
                 <ComponentCard title="Job Details">
                  <div className="grid grid-cols-2 gap-4">
                         <div>
-                          <div className="text-sm text-gray-600 mb-1 text-center">
+                          <div className="text-sm text-gray-600 dark:text-gray-400 mb-1 text-center">
                             Status
                           </div>
 
                           <div className="flex items-center justify-center mb-1 gap-2">
                             <span
                               className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-sm font-medium border ${getStatusColor(
-                                job.status
+                                selectedStatus
                               )}`}
                             >
-                              {getStatusIcon(job.status)}
-                              {job.status || "Unknown"}
+                              {getStatusIcon(selectedStatus)}
+                              {getStatusLabel(selectedStatus)}
                             </span>
 
                             {job.isActive && (
-                              <span className="px-3 py-1 bg-green-100 text-green-700 rounded-full text-sm font-medium">
+                              <span className="px-3 py-1 bg-green-100 text-green-700 dark:bg-success-500/20 dark:text-success-300 rounded-full text-sm font-medium">
                                 Active
                               </span>
                             )}
                           </div>
 </div>
                           <div>
-                          <div className="text-sm text-gray-600 mb-1 text-center">
+                          <div className="text-sm text-gray-600 dark:text-gray-400 mb-1 text-center">
                             Payment Status
                           </div>
 
@@ -422,7 +482,7 @@ const [status, setStatus] = useState("");
                             </span>
 
                             {job.isActive && (
-                              <span className="px-3 py-1 bg-green-100 text-green-700 rounded-full text-sm font-medium">
+                              <span className="px-3 py-1 bg-green-100 text-green-700 dark:bg-success-500/20 dark:text-success-300 rounded-full text-sm font-medium">
                                 Active
                               </span>
                             )}
@@ -431,39 +491,39 @@ const [status, setStatus] = useState("");
                         
                             
                             <div>
-                      <div className="text-sm text-gray-600 mb-1">
+                      <div className="text-sm text-gray-600 dark:text-gray-400 mb-1">
                         Created By
                       </div>
-                      <div className="font-medium text-gray-900">
+                      <div className="font-medium text-gray-900 dark:text-white">
                        { userName|| "Unassigned"}
                       </div>
                     </div>
                     <div>
-                      <div className="text-sm text-gray-600 mb-1">
+                      <div className="text-sm text-gray-600 dark:text-gray-400 mb-1">
                         Due Date
                       </div>
                       <div className="flex items-center justify-center gap-2 text-center">
                         <Calendar className="w-4 h-4 text-gray-400" />
-                        <span className="font-medium text-gray-900">
+                        <span className="font-medium text-gray-900 dark:text-white">
                           {formatDate(job.dueDate)}
                         </span>
                       </div>
 
                     </div>
                     <div>
-                      <div className="text-sm text-gray-600 mb-1">
+                      <div className="text-sm text-gray-600 dark:text-gray-400 mb-1">
                         Created
                       </div>
-                      <div className="font-medium text-gray-900">
+                      <div className="font-medium text-gray-900 dark:text-white">
                         {formatDate(job.createdAt)}
                       </div>
                     </div>
                     {job.updatedAt && (
                       <div>
-                        <div className="text-sm text-gray-600 mb-1">
+                        <div className="text-sm text-gray-600 dark:text-gray-400 mb-1">
                           Last Updated
                         </div>
-                          <div className="font-medium text-gray-900">
+                          <div className="font-medium text-gray-900 dark:text-white">
                           {formatDate(job.updatedAt)}
                         </div>
                       </div>
@@ -478,7 +538,7 @@ const [status, setStatus] = useState("");
                       {job.jobServices.map((js) => (
                         <div
                           key={js.id}
-                          className="flex items-center justify-between p-4 bg-gray-50 rounded-lg"
+                          className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-900 rounded-lg"
                         >
                           <div className="flex items-center gap-3">
                             <input
@@ -487,10 +547,10 @@ const [status, setStatus] = useState("");
                               onChange={(e) =>
                                 handleServiceCompletedChange(js.id, e.target.checked)
                               }
-                              className="w-5 h-5 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                              className="w-5 h-5 rounded border-gray-300 dark:border-gray-700 text-blue-600 focus:ring-blue-500"
                             />
 
-                            <span className="font-medium text-gray-900">
+                            <span className="font-medium text-gray-900 dark:text-white">
                               {js.service?.description}
                             </span>
                           </div>
@@ -502,7 +562,7 @@ const [status, setStatus] = useState("");
                       ))}
                     </div>
 
-                    <div className="mt-4 pt-4 border-t border-gray-200 flex justify-between items-center">
+                    <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-800 flex justify-between items-center">
                       <span className="text-2xl text-gray-500 dark:text-gray-400 sm:text-base">
                         Total Service Charge
                       </span>
@@ -521,27 +581,27 @@ const [status, setStatus] = useState("");
                   <ComponentCard title="Vehicle Information">
                     <div className="grid grid-cols-2 gap-4">
                       <div>
-                        <div className="text-sm text-gray-600 mb-1">
+                        <div className="text-sm text-gray-600 dark:text-gray-400 mb-1">
                           Make &amp; Model
                         </div>
-                        <div className="font-medium text-gray-900">
+                        <div className="font-medium text-gray-900 dark:text-white">
                           {job.vehicle.year} {job.vehicle.make}{" "}
                           {job.vehicle.model}
                         </div>
                       </div>
                       <div>
-                        <div className="text-sm text-gray-600 mb-1">
+                        <div className="text-sm text-gray-600 dark:text-gray-400 mb-1">
                           License Plate
                         </div>
-                        <div className="font-medium text-gray-900">
+                        <div className="font-medium text-gray-900 dark:text-white">
                           {job.vehicle.licensePlate}
                         </div>
                       </div>
                       <div>
-                        <div className="text-sm text-gray-600 mb-1">
+                        <div className="text-sm text-gray-600 dark:text-gray-400 mb-1">
                           Colour
                         </div>
-                        <div className="font-medium text-gray-900">
+                        <div className="font-medium text-gray-900 dark:text-white">
                           {job.vehicle.colour}
                         </div>
                       </div>
@@ -552,7 +612,7 @@ const [status, setStatus] = useState("");
                 {/* Notes */}
                 {job.notes && (
                   <ComponentCard title="Notes">
-                    <p className="text-gray-700 leading-relaxed">
+                    <p className="text-gray-700 dark:text-gray-300 leading-relaxed">
                       {job.notes}
                     </p>
                   </ComponentCard>
@@ -565,24 +625,24 @@ const [status, setStatus] = useState("");
                 <ComponentCard title="Actions">
                   <div className="space-y-2">
                     <div>
-          <Label>Status</Label>
-          <Select
-            id="status-select"
-            options={statusOptions}
-            placeholder="Select an option"
-            onChange={handleStatusChange}
-            defaultValue={status}
-            className="dark:bg-gray-900"
-          />
-        </div>
-                    <button onClick={() => navigate(`/invoice/${jobId}`)} className="w-full px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors">
+                      <div className="mb-1 text-sm text-gray-600 dark:text-gray-400">Status</div>
+                      <JobStatusDropdown
+                        value={selectedStatus}
+                        onChange={handleStatusChange}
+                        disabled={updateStatusMutation.isPending}
+                      />
+                      {statusUpdateError ? (
+                        <p className="mt-1 text-xs text-red-600">{statusUpdateError}</p>
+                      ) : null}
+                    </div>
+                    <button onClick={() => navigate(`/invoice/${jobId}`)} className="w-full px-4 py-2 bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 text-gray-700 dark:text-gray-200 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
                       Print Invoice
                     </button>
-                    <button className="w-full px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors">
+                    <button className="w-full px-4 py-2 bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 text-gray-700 dark:text-gray-200 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
                       Send to Customer
                     </button>
                     <button
-                      className="w-full px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+                      className="w-full px-4 py-2 bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 text-gray-700 dark:text-gray-200 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
                       onClick={() =>
                         navigate(`/jobs/${jobId}/inspection/new`)
                       }
@@ -595,39 +655,39 @@ const [status, setStatus] = useState("");
                 <ComponentCard title="Job Details">
                   <div className="space-y-4">
                     <div>
-                      <div className="text-sm text-gray-600 mb-1">
+                      <div className="text-sm text-gray-600 dark:text-gray-400 mb-1">
                         Created By
                       </div>
-                      <div className="font-medium text-gray-900">
+                      <div className="font-medium text-gray-900 dark:text-white">
                        { userName|| "Unassigned"}
                       </div>
                     </div>
                     <div>
-                      <div className="text-sm text-gray-600 mb-1">
+                      <div className="text-sm text-gray-600 dark:text-gray-400 mb-1">
                         Due Date
                       </div>
                       <div className="flex items-center justify-center gap-2 text-center">
                         <Calendar className="w-4 h-4 text-gray-400" />
-                        <span className="font-medium text-gray-900">
+                        <span className="font-medium text-gray-900 dark:text-white">
                           {formatDate(job.dueDate)}
                         </span>
                       </div>
 
                     </div>
                     <div>
-                      <div className="text-sm text-gray-600 mb-1">
+                      <div className="text-sm text-gray-600 dark:text-gray-400 mb-1">
                         Created
                       </div>
-                      <div className="font-medium text-gray-900">
+                      <div className="font-medium text-gray-900 dark:text-white">
                         {formatDate(job.createdAt)}
                       </div>
                     </div>
                     {job.updatedAt && (
                       <div>
-                        <div className="text-sm text-gray-600 mb-1">
+                        <div className="text-sm text-gray-600 dark:text-gray-400 mb-1">
                           Last Updated
                         </div>
-                          <div className="font-medium text-gray-900">
+                          <div className="font-medium text-gray-900 dark:text-white">
                           {formatDate(job.updatedAt)}
                         </div>
                       </div>
@@ -641,8 +701,8 @@ const [status, setStatus] = useState("");
                       <div className="flex flex-col items-center gap-2">
                         <User className="w-5 h-5 text-gray-400" />
                         <div>
-                          <div className="text-sm text-gray-600">Name</div>
-                          <div className="font-medium text-gray-900">
+                          <div className="text-sm text-gray-600 dark:text-gray-400">Name</div>
+                          <div className="font-medium text-gray-900 dark:text-white">
                             {job.customer.name}
                           </div>
                         </div>
@@ -652,8 +712,8 @@ const [status, setStatus] = useState("");
                         <div className="flex flex-col items-center gap-2">
                           <User className="w-5 h-5 text-gray-400" />
                           <div>
-                            <div className="text-sm text-gray-600">Email</div>
-                            <div className="font-medium text-gray-900">
+                            <div className="text-sm text-gray-600 dark:text-gray-400">Email</div>
+                            <div className="font-medium text-gray-900 dark:text-white">
                               {job.customer.email}
                             </div>
                           </div>
@@ -664,8 +724,8 @@ const [status, setStatus] = useState("");
                         <div className="flex flex-col items-center gap-2">
                           <User className="w-5 h-5 text-gray-400" />
                           <div>
-                            <div className="text-sm text-gray-600">Phone</div>
-                            <div className="font-medium text-gray-900">
+                            <div className="text-sm text-gray-600 dark:text-gray-400">Phone</div>
+                            <div className="font-medium text-gray-900 dark:text-white">
                               {job.customer.phoneNumber}
                             </div>
                           </div>
@@ -680,21 +740,21 @@ const [status, setStatus] = useState("");
                 <div>
                     {/* Static info from backend */}
                     {job.invoiceId && (
-                      <div className="pt-3 border-t">
-                        <div className="text-sm text-gray-600 mb-1">
+                      <div className="pt-3 border-t dark:border-gray-800">
+                        <div className="text-sm text-gray-600 dark:text-gray-400 mb-1">
                           Invoice ID
                         </div>
-                        <div className="font-medium text-gray-900">
+                        <div className="font-medium text-gray-900 dark:text-white">
                           {job.invoiceId}
                         </div>
                       </div>
                     )}
 
-                    <div className="pt-3 border-t">
-                      <div className="text-sm text-gray-600 mb-1">
+                    <div className="pt-3 border-t dark:border-gray-800">
+                      <div className="text-sm text-gray-600 dark:text-gray-400 mb-1">
                         Total Amount
                       </div>
-                      <div className="text-2xl font-bold text-gray-900">
+                      <div className="text-2xl font-bold text-gray-900 dark:text-white">
                         {formatMoneyFromPence(job.serviceCharge)}
                       </div>
                     </div>
@@ -711,8 +771,13 @@ const [status, setStatus] = useState("");
                 </ComponentCard>
 
                 {/* Payment Info */}
-                <PaymentMethodsCard  
-                  
+                <PaymentMethodsCard
+                  jobId={job.id}
+                  servicesTotalPence={servicesTotalPence}
+                  onSubmit={handlePaymentSubmit}
+                  initialIsPaid={!!job.paid}
+                  initialPaymentMethod={normalizePaymentMethod(job.paymentMethod)}
+                  initialPaymentMethods={job.paymentMethods ?? []}
                 />
               </div>
             </div>

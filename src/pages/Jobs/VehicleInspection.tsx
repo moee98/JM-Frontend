@@ -1,49 +1,50 @@
-import React, { useState, useEffect } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { VehicleInspection } from "../../types/vehicleInspection";
-import { Vehicle } from "../../types/vehicle";
-import { useJob } from "../../hooks/useJobs";
-import { Job } from "../../types/job";
-import { Vehicle as VehicleType } from "../../types/vehicle";
-import ComponentCard from "../../components/common/ComponentCard";
 import PageBreadcrumb from "../../components/common/PageBreadCrumb";
 import PageMeta from "../../components/common/PageMeta";
+import ComponentCard from "../../components/common/ComponentCard";
+import { useJob } from "../../hooks/useJobs";
+import { Vehicle as VehicleType } from "../../types/vehicle";
+import {
+  VehicleInspectionService,
+  buildVehicleInspectionImageName,
+} from "../../services/vehicleInspectionService";
 
-export type NewVehicleInspectionPayload = {
-  inspection: Omit<VehicleInspection, "id" | "vehicle" | "pathToImages">;
-  files: File[];
+type InspectionImage = {
+  id: string;
+  file: File;
+  previewUrl: string;
+  selected: boolean;
 };
 
+const readCurrentUserId = () => {
+  const raw = localStorage.getItem("user");
+  if (!raw) return "";
 
-function onSave(
-  payload: NewVehicleInspectionPayload
-): Promise<void> {
-  return new Promise((resolve) => {
-    setTimeout(() => {
-      console.log("Saved inspection:", payload);
-      resolve();
-    }, 1000);
-  });
-}
+  try {
+    const parsed = JSON.parse(raw);
+    if (parsed && typeof parsed.id === "string") return parsed.id;
+  } catch {
+    // Keep fallback for existing string-only localStorage entries.
+  }
 
-export default  function  VehicleInspectionFormPage() {
+  return raw;
+};
+
+export default function VehicleInspectionFormPage() {
   const { jobId } = useParams();
+  const parsedJobId = Number(jobId);
+  const navigate = useNavigate();
+
   const {
     data: job,
     isLoading,
     isError,
     error: jobError,
-  } = useJob(jobId ? Number(jobId) : undefined);
-  
+  } = useJob(Number.isFinite(parsedJobId) ? parsedJobId : undefined);
+
   const vehicle: VehicleType | undefined = job?.vehicle;
-  const navigate = useNavigate();
-  const onCancel = () => navigate(-1);
-
-
-  // Mock current user ID
-  
-   const currentUserId = localStorage.getItem("user") || "";
-  const parsedJobId = Number(jobId);
+  const currentUserId = readCurrentUserId();
 
   const [inspectionDate, setInspectionDate] = useState(
     new Date().toISOString().slice(0, 10)
@@ -51,27 +52,81 @@ export default  function  VehicleInspectionFormPage() {
   const [inspectionResult, setInspectionResult] =
     useState<"Passed" | "Failed">("Passed");
   const [comments, setComments] = useState("");
-  const [files, setFiles] = useState<File[]>([]);
-  const [previewUrls, setPreviewUrls] = useState<string[]>([]);
+  const [images, setImages] = useState<InspectionImage[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     return () => {
-      previewUrls.forEach((url) => URL.revokeObjectURL(url));
+      images.forEach((image) => URL.revokeObjectURL(image.previewUrl));
     };
-  }, [previewUrls]);
+  }, [images]);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!e.target.files) return;
 
     const selectedFiles = Array.from(e.target.files);
-    setFiles(selectedFiles);
-    setPreviewUrls(selectedFiles.map((f) => URL.createObjectURL(f)));
+    setImages((prev) => [
+      ...prev,
+      ...selectedFiles.map((file) => ({
+        id: crypto.randomUUID(),
+        file,
+        previewUrl: URL.createObjectURL(file),
+        selected: true,
+      })),
+    ]);
+
+    e.target.value = "";
   };
+
+  const handleRemoveImage = (id: string) => {
+    setImages((prev) => {
+      const target = prev.find((img) => img.id === id);
+      if (target) URL.revokeObjectURL(target.previewUrl);
+      return prev.filter((img) => img.id !== id);
+    });
+  };
+
+  const handleToggleImage = (id: string) => {
+    setImages((prev) =>
+      prev.map((img) =>
+        img.id === id ? { ...img, selected: !img.selected } : img
+      )
+    );
+  };
+
+  const setAllImageSelection = (selected: boolean) => {
+    setImages((prev) => prev.map((img) => ({ ...img, selected })));
+  };
+
+  const statusDotClass =
+    inspectionResult === "Passed" ? "bg-green-500" : "bg-red-500";
+
+  const fileInputClass =
+    "focus:border-brand-300 h-11 w-full overflow-hidden rounded-lg border border-gray-300 bg-transparent text-sm text-gray-500 shadow-theme-xs transition-colors file:mr-5 file:cursor-pointer file:rounded-l-lg file:border-0 file:border-r file:border-gray-200 file:bg-gray-50 file:py-3 file:pl-3.5 file:pr-3 file:text-sm file:text-gray-700 hover:file:bg-gray-100 focus:outline-hidden focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-400 dark:file:border-gray-800 dark:file:bg-white/[0.03] dark:file:text-gray-300 dark:hover:file:bg-white/[0.08]";
+
+  const renamedFiles = useMemo(
+    () =>
+      images
+        .filter((img) => img.selected)
+        .map((img, idx) => {
+          const name = buildVehicleInspectionImageName(parsedJobId, idx, img.file.name);
+          return new File([img.file], name, {
+            type: img.file.type,
+            lastModified: img.file.lastModified,
+          });
+        }),
+    [images, parsedJobId]
+  );
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setError(null);
+
+    if (!Number.isFinite(parsedJobId)) {
+      setError("Invalid job id.");
+      return;
+    }
 
     if (!inspectionDate) {
       setError("Inspection date is required.");
@@ -80,18 +135,18 @@ export default  function  VehicleInspectionFormPage() {
 
     setIsSubmitting(true);
     try {
-      await onSave({
-        inspection: {
+      await VehicleInspectionService.createWithImages(
+        {
           jobId: parsedJobId,
           inspectionDate,
           appUserId: currentUserId,
           inspectionResult,
           comments,
+          pathToImages: renamedFiles.map((file) => file.name),
         },
-        files,
-      });
+        renamedFiles
+      );
 
-      // navigate back to job or inspections list
       navigate(`/view-job/${parsedJobId}`);
     } catch {
       setError("Something went wrong while saving the inspection.");
@@ -100,226 +155,240 @@ export default  function  VehicleInspectionFormPage() {
     }
   };
 
-  return (
-    <>
-        <PageMeta
-          title="Kaza Dashboard - Vehicle Inspection"
-          description="Vehicle inspection form for job"
-        />
-          <PageBreadcrumb pageTitle="Vehicle Inspection" items={[
-    { label: "Home", to: "/" },
-    { label: "View All Jobs", to: "/jobs" },
-    { label: "Job", to: "/jobs/"+parsedJobId },
-    { label: "Vehicle Inspection" }, // current page (no `to`)
-  ]}/>
-  <div className="max-w-4xl mx-auto p-6 space-y-6">
-    {/* Header */}
-   
-      <div>
-     
-        <p className="text-sm text-gray-500">
-          Pre-job cosmetic inspection to record any existing damage.
-        </p>
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
+        <p className="text-sm text-gray-600 dark:text-gray-300">Loading vehicle inspection...</p>
       </div>
+    );
+  }
 
-      <div className="text-right text-sm text-gray-500">
-        <div>
-          Job ID: <span className="font-medium">{jobId}</span>
-        </div>
-      </div>
-    
-
-    {/* Vehicle Summary */}
-    {vehicle && (
-      <section className="bg-white shadow rounded-2xl p-4 md:p-5 space-y-2 border border-gray-100">
-        <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wide">
-          Vehicle details
-        </h2>
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 text-sm">
-          <div>
-            <div className="text-gray-500">Registration</div>
-            <div className="font-medium">{vehicle.licensePlate}</div>
-          </div>
-
-          <div>
-            <div className="text-gray-500">Make / Model</div>
-            <div className="font-medium">
-              {vehicle.make} {vehicle.model}
-            </div>
-          </div>
-
-          {vehicle.year && (
-            <div>
-              <div className="text-gray-500">Year</div>
-              <div className="font-medium">{vehicle.year}</div>
-            </div>
-          )}
-
-          {vehicle.colour && (
-            <div>
-              <div className="text-gray-500">Colour</div>
-              <div className="font-medium">{vehicle.colour}</div>
-            </div>
-          )}
-        </div>
-      </section>
-    )}
-
-    {/* Form */}
-    <form
-      onSubmit={handleSubmit}
-      className="bg-white shadow rounded-2xl p-4 md:p-6 space-y-6 border border-gray-100"
-    >
-      {/* Top row: date & result */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className="flex flex-col gap-1">
-          <label className="text-sm font-medium text-gray-700">
-            Inspection date
-          </label>
-          <input
-            type="date"
-            className="border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-black/5"
-            value={inspectionDate}
-            onChange={(e) => setInspectionDate(e.target.value)}
-          />
-        </div>
-
-        <div className="flex flex-col gap-1">
-          <label className="text-sm font-medium text-gray-700">
-            Inspection result
-          </label>
-          <select
-            className="border rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-black/5"
-            value={inspectionResult}
-            onChange={(e) =>
-              setInspectionResult(e.target.value as "Passed" | "Failed")
-            }
-          >
-            <option value="Passed">
-              Passed – no concerning damage
-            </option>
-            <option value="Failed">
-              Failed – significant pre-existing damage
-            </option>
-          </select>
-
-          <p className="text-xs text-gray-500">
-            Use &quot;Failed&quot; if damage is serious enough to reconsider the
-            job.
+  if (isError) {
+    return (
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center p-6">
+        <div className="rounded-lg border border-red-200 dark:border-red-900/40 bg-white dark:bg-gray-900 p-6 text-center">
+          <p className="text-sm text-red-600 dark:text-red-300">
+            {jobError?.message || "Failed to load job for inspection."}
           </p>
         </div>
+      </div>
+    );
+  }
 
-        <div className="flex flex-col gap-1">
-          <label className="text-sm font-medium text-gray-700">
-            Quick status
-          </label>
-          <div className="flex items-center gap-2 text-xs text-gray-500">
-            <span
-              className={`inline-flex h-2 w-2 rounded-full ${
-                inspectionResult === "Passed"
-                  ? "bg-green-500"
-                  : "bg-red-500"
-              }`}
-            />
-            {inspectionResult === "Passed"
-              ? "Vehicle condition acceptable for job."
-              : "Review damage before proceeding."}
+  return (
+    <>
+      <PageMeta
+        title="Kaza Dashboard - Vehicle Inspection"
+        description="Vehicle inspection form for job"
+      />
+
+      <PageBreadcrumb
+        pageTitle="Vehicle Inspection"
+        items={[
+          { label: "Home", to: "/" },
+          { label: "View All Jobs", to: "/jobs" },
+          { label: `Job ${parsedJobId}`, to: `/view-job/${parsedJobId}` },
+          { label: "Vehicle Inspection" },
+        ]}
+      />
+
+      <div className="min-h-screen rounded-2xl border border-gray-200 bg-white dark:border-gray-800 dark:bg-white/[0.03] px-5 py-7 xl:px-10 xl:py-12">
+        <div className="mx-auto max-w-6xl space-y-6">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <h1 className="text-2xl font-semibold text-gray-900 dark:text-white">Vehicle Inspection</h1>
+              <p className="text-sm text-gray-500 dark:text-gray-400">
+                Record pre-job condition and damage notes.
+              </p>
+            </div>
+            <div className="text-sm text-gray-500 dark:text-gray-400">
+              Job ID: <span className="font-medium text-gray-800 dark:text-white">{parsedJobId}</span>
+            </div>
           </div>
-        </div>
-      </div>
 
-      {/* Damage comments */}
-      <div className="space-y-2">
-        <div className="flex items-center justify-between gap-2">
-          <label className="text-sm font-medium text-gray-700">
-            Cosmetic damage notes
-          </label>
-          <span className="text-xs text-gray-400">
-            e.g. &quot;Small scratch N/S front wing, curb rash offside rear
-            alloy&quot;
-          </span>
-        </div>
-
-        <textarea
-          className="border rounded-lg px-3 py-2 text-sm w-full min-h-[120px] resize-vertical focus:outline-none focus:ring-2 focus:ring-black/5"
-          value={comments}
-          onChange={(e) => setComments(e.target.value)}
-          placeholder="Describe any scratches, dents, scuffs, cracked lights, alloy wheel damage, etc. Include location and severity."
-        />
-      </div>
-
-      {/* Photos upload */}
-      <div className="space-y-2">
-        <label className="text-sm font-medium text-gray-700">
-          Photos of existing damage
-        </label>
-        <p className="text-xs text-gray-500 mb-1">
-          Take clear photos of all sides of the vehicle and any noticeable
-          damage (panels, bumpers, wheels, interior if relevant).
-        </p>
-
-        <input
-          type="file"
-          accept="image/*"
-          multiple
-          onChange={handleFileChange}
-          className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-gray-900 file:text-white hover:file:bg-black/90"
-        />
-
-        {previewUrls.length > 0 && (
-          <div className="mt-3 grid grid-cols-2 sm:grid-cols-4 gap-3">
-            {previewUrls.map((url, idx) => (
-              <div
-                key={idx}
-                className="relative border rounded-lg overflow-hidden aspect-[4/3]"
-              >
-                <img
-                  src={url}
-                  alt={`Damage photo ${idx + 1}`}
-                  className="w-full h-full object-cover"
-                />
-                <div className="absolute bottom-1 left-1 bg-black/60 text-[10px] text-white px-1.5 py-0.5 rounded-full">
-                  #{idx + 1}
+          {vehicle && (
+            <ComponentCard title="Vehicle Details">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+                <div>
+                  <p className="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">Registration</p>
+                  <p className="mt-1 text-sm font-medium text-gray-900 dark:text-white">
+                    {vehicle.licensePlate}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">Make / Model</p>
+                  <p className="mt-1 text-sm font-medium text-gray-900 dark:text-white">
+                    {vehicle.make} {vehicle.model}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">Year</p>
+                  <p className="mt-1 text-sm font-medium text-gray-900 dark:text-white">{vehicle.year || "-"}</p>
+                </div>
+                <div>
+                  <p className="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">Colour</p>
+                  <p className="mt-1 text-sm font-medium text-gray-900 dark:text-white">{vehicle.colour || "-"}</p>
                 </div>
               </div>
-            ))}
-          </div>
-        )}
-      </div>
+            </ComponentCard>
+          )}
 
-      {/* Error */}
-      {error && (
-        <div className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">
-          {error}
+          <form onSubmit={handleSubmit} className="space-y-6">
+            <ComponentCard title="Inspection Details">
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+                <div>
+                  <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300">
+                    Inspection date
+                  </label>
+                  <input
+                    type="date"
+                    value={inspectionDate}
+                    onChange={(e) => setInspectionDate(e.target.value)}
+                    className="h-11 w-full rounded-lg border border-gray-300 bg-transparent px-4 py-2.5 text-sm text-gray-800 shadow-theme-xs focus:border-brand-300 focus:outline-hidden focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90"
+                  />
+                </div>
+
+                <div>
+                  <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300">
+                    Inspection result
+                  </label>
+                  <select
+                    value={inspectionResult}
+                    onChange={(e) => setInspectionResult(e.target.value as "Passed" | "Failed")}
+                    className="h-11 w-full rounded-lg border border-gray-300 bg-transparent px-4 py-2.5 text-sm text-gray-800 shadow-theme-xs focus:border-brand-300 focus:outline-hidden focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90"
+                  >
+                    <option value="Passed">Passed - no concerning damage</option>
+                    <option value="Failed">Failed - significant pre-existing damage</option>
+                  </select>
+                </div>
+
+                <div className="flex items-end">
+                  <div className="flex items-center gap-2 rounded-lg border border-gray-200 dark:border-gray-700 px-3 py-2 text-sm text-gray-600 dark:text-gray-300">
+                    <span className={`inline-block h-2 w-2 rounded-full ${statusDotClass}`} />
+                    {inspectionResult === "Passed"
+                      ? "Vehicle condition acceptable for job."
+                      : "Review damage before proceeding."}
+                  </div>
+                </div>
+              </div>
+
+              <div>
+                <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300">
+                  Cosmetic damage notes
+                </label>
+                <textarea
+                  value={comments}
+                  onChange={(e) => setComments(e.target.value)}
+                  placeholder="Describe scratches, dents, scuffs, cracked lights, wheel damage, and location."
+                  className="min-h-[120px] w-full rounded-lg border border-gray-300 bg-transparent px-4 py-2.5 text-sm text-gray-800 shadow-theme-xs focus:border-brand-300 focus:outline-hidden focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90"
+                />
+              </div>
+            </ComponentCard>
+
+            <ComponentCard
+              title="Damage Photos"
+              desc="Uploaded files are named with the job id before saving."
+            >
+              <div>
+                <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300">
+                  Upload photos
+                </label>
+                <input
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  onChange={handleFileChange}
+                  className={fileInputClass}
+                />
+                {images.length > 0 && (
+                  <div className="mt-2 flex flex-wrap items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setAllImageSelection(true)}
+                      className="rounded-md border border-gray-300 dark:border-gray-700 px-2.5 py-1 text-xs text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800"
+                    >
+                      Select all
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setAllImageSelection(false)}
+                      className="rounded-md border border-gray-300 dark:border-gray-700 px-2.5 py-1 text-xs text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800"
+                    >
+                      Deselect all
+                    </button>
+                  </div>
+                )}
+                {renamedFiles.length > 0 && (
+                  <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
+                    Files will be saved as: {renamedFiles.map((f) => f.name).join(", ")}
+                  </p>
+                )}
+              </div>
+
+              {images.length > 0 && (
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                  {images.map((image, idx) => (
+                    <div
+                      key={image.id}
+                      className="relative aspect-[4/3] overflow-hidden rounded-lg border border-gray-200 dark:border-gray-700"
+                    >
+                      <img
+                        src={image.previewUrl}
+                        alt={`Damage photo ${idx + 1}`}
+                        className={`h-full w-full object-cover ${
+                          image.selected ? "" : "opacity-50"
+                        }`}
+                      />
+                      <div className="absolute bottom-1 left-1 rounded-full bg-black/60 px-1.5 py-0.5 text-[10px] text-white">
+                        #{idx + 1}
+                      </div>
+                      <div className="absolute right-1 top-1 flex gap-1">
+                        <button
+                          type="button"
+                          onClick={() => handleToggleImage(image.id)}
+                          className="rounded-md bg-white/90 dark:bg-gray-900/90 px-2 py-1 text-[10px] font-medium text-gray-700 dark:text-gray-200"
+                        >
+                          {image.selected ? "Included" : "Excluded"}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveImage(image.id)}
+                          className="rounded-md bg-red-600 px-2 py-1 text-[10px] font-medium text-white"
+                        >
+                          Remove
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </ComponentCard>
+
+            {error && (
+              <div className="rounded-lg border border-red-200 dark:border-red-900/40 bg-red-50 dark:bg-red-900/20 px-3 py-2 text-sm text-red-700 dark:text-red-300">
+                {error}
+              </div>
+            )}
+
+            <div className="flex items-center justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => navigate(-1)}
+                className="rounded-lg border border-gray-300 dark:border-gray-700 px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-800"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={isSubmitting}
+                className="rounded-lg bg-brand-500 px-4 py-2 text-sm font-medium text-white hover:bg-brand-600 disabled:opacity-60"
+              >
+                {isSubmitting ? "Saving..." : "Save inspection"}
+              </button>
+            </div>
+          </form>
         </div>
-      )}
-
-      {/* Actions */}
-      <div className="flex items-center justify-end gap-3 pt-2">
-        {onCancel && (
-          <button
-            type="button"
-            onClick={onCancel}
-            className="px-4 py-2 text-sm rounded-lg border border-gray-200 text-gray-700 hover:bg-gray-50"
-          >
-            Cancel
-          </button>
-        )}
-
-        <button
-          type="submit"
-          disabled={isSubmitting}
-          className="px-4 py-2 text-sm rounded-lg bg-gray-900 text-white hover:bg-black/90 disabled:opacity-60"
-        >
-          {isSubmitting ? "Saving..." : "Save inspection"}
-        </button>
       </div>
-    </form>
-   
-  </div>
     </>
-  
-);
-};
-
+  );
+}

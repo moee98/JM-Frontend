@@ -3,6 +3,7 @@ import { User } from "./user";
 import { Customer } from "./customer";
 import { Service } from "./service";
 import { JobService } from "./jobService";
+import { PaymentMethod } from "./payment";
 
 export interface Job {
   id: number;
@@ -19,6 +20,7 @@ export interface Job {
   notes?: string; // additional notes or instructions
   isActive?: boolean; // flag to indicate if the job is active
   paymentMethod?: string; // payment method used
+  paymentMethods?: PaymentMethod[];
   paid : boolean ; // flag to indicate if the job has been paid
   vehicle?: Vehicle; // associated vehicle details
   appUserId?: string; // associated customer details

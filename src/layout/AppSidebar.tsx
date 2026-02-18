@@ -48,6 +48,14 @@ const navItems: NavItem[] = [
       { name: "View all jobs", path: "/jobs-tables", pro: false }
     ],
   },
+  {
+    name: "Expenses",
+    icon: <TableIcon />,
+    subItems: [
+      { name: "Add Expense", path: "/expenses/add", pro: false },
+      { name: "Expense Reports", path: "/expenses/reports", pro: false },
+    ],
+  },
   // {
   //   name: "Vehicles",
   //   icon: <ListIcon />,
@@ -308,7 +316,7 @@ const AppSidebar: React.FC = () => {
       onMouseLeave={() => setIsHovered(false)}
     >
       <div
-        className={`py-8 flex ${
+        className={`hidden lg:flex py-8 ${
           !isExpanded && !isHovered ? "lg:justify-center" : "justify-start"
         }`}
       >

@@ -1,36 +1,31 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 
-/**
- * READ ME:
- * - servicesTotal is in PENCE (integer), e.g. 12345 = £123.45
- * - Split parts are stored in PENCE (integer) to avoid float rounding issues
- * - UI inputs show pounds (e.g. 12.34) but are converted to pence internally
- */
-
-type PaymentMethod = "" | "cash" | "card" | "bank-transfer" | "online" | "split";
+import { PaymentMethodType, PaymentMethod } from "../../types/payment";
 
 type SplitPaymentPart = {
-  method: Exclude<PaymentMethod, "" | "split">;
-  amountPence: number; // integer pence
+  method: Exclude<PaymentMethodType, "" | "split">;
+  amountPence: number;
 };
 
-type PaymentPayload =
+export type PaymentPayload =
   | {
       isPaid: false;
-      paymentMethod: "";
-      amountPence: number;
+      paymentMethods: [];
     }
   | {
       isPaid: true;
-      paymentMethod: Exclude<PaymentMethod, "" | "split">;
-      amountPence: number;
-    }
-  | {
-      isPaid: true;
-      paymentMethod: "split";
-      amountPence: number;
-      parts: SplitPaymentPart[];
+      paymentMethods: PaymentMethod[];
     };
+
+interface PaymentMethodsCardProps {
+  jobId: number;
+  servicesTotalPence: number;
+  onSubmit: (payload: PaymentPayload) => Promise<void> | void;
+  initialIsPaid?: boolean;
+  initialPaymentMethod?: PaymentMethodType;
+  initialPaymentMethods?: PaymentMethod[];
+  className?: string;
+}
 
 const formatGBPFromPence = (pence: number) => `£${(pence / 100).toFixed(2)}`;
 
@@ -41,7 +36,7 @@ const poundsToPence = (value: string) => {
 
 const penceToPoundsInput = (pence: number) => (pence / 100).toFixed(2);
 
-const methodLabel = (m: PaymentMethod) => {
+const methodLabel = (m: PaymentMethodType) => {
   switch (m) {
     case "cash":
       return "Cash";
@@ -58,21 +53,53 @@ const methodLabel = (m: PaymentMethod) => {
   }
 };
 
-const PaymentMethodsCard: React.FC<{
-  servicesTotalPence: number;
-  onSubmit: (payload: PaymentPayload) => Promise<void> | void;
-  className?: string;
-}> = ({ servicesTotalPence, onSubmit, className }) => {
-  const [isPaid, setIsPaid] = useState<boolean>(false);
-  const [paymentMethod, setPaymentMethodState] = useState<PaymentMethod>("");
-
+const PaymentMethodsCard: React.FC<PaymentMethodsCardProps> = ({
+  jobId,
+  servicesTotalPence,
+  onSubmit,
+  initialIsPaid = false,
+  initialPaymentMethod = "",
+  initialPaymentMethods = [],
+  className,
+}) => {
+  const [isPaid, setIsPaid] = useState<boolean>(initialIsPaid);
+  const [paymentMethod, setPaymentMethodState] = useState<PaymentMethodType>(
+    initialIsPaid ? initialPaymentMethod : ""
+  );
   const [parts, setParts] = useState<SplitPaymentPart[]>([
-    { method: "card", amountPence: 0 },
+    { method: "card", amountPence: servicesTotalPence },
   ]);
-
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [submitOk, setSubmitOk] = useState<string | null>(null);
+
+  useEffect(() => {
+    setIsPaid(initialIsPaid);
+    setPaymentMethodState(initialIsPaid ? initialPaymentMethod : "");
+  }, [initialIsPaid, initialPaymentMethod]);
+
+  useEffect(() => {
+    if (initialPaymentMethods.length > 1) {
+      setPaymentMethodState("split");
+      setParts(
+        initialPaymentMethods.map((p) => ({
+          method: p.MethodName,
+          amountPence: p.amount,
+        }))
+      );
+      return;
+    }
+
+    if (initialPaymentMethods.length === 1) {
+      setPaymentMethodState(initialPaymentMethods[0].MethodName);
+      setParts([
+        {
+          method: initialPaymentMethods[0].MethodName,
+          amountPence: initialPaymentMethods[0].amount,
+        },
+      ]);
+    }
+  }, [initialPaymentMethods]);
 
   const isSplitSelected = paymentMethod === "split";
 
@@ -85,16 +112,15 @@ const PaymentMethodsCard: React.FC<{
   const isSplitValid = !isSplitSelected || splitDiffPence === 0;
 
   const canSubmit = useMemo(() => {
-    if (!isPaid) return true; // allow saving "unpaid"
+    if (!isPaid) return false;
     if (paymentMethod === "") return false;
     if (paymentMethod === "split") return parts.length > 0 && isSplitValid;
     return true;
   }, [isPaid, paymentMethod, parts.length, isSplitValid]);
 
-  const setPaymentMethod = (method: PaymentMethod) => {
+  const setPaymentMethod = (method: PaymentMethodType) => {
     setSubmitError(null);
     setSubmitOk(null);
-
     setPaymentMethodState(method);
 
     if (method === "split") {
@@ -102,14 +128,10 @@ const PaymentMethodsCard: React.FC<{
       return;
     }
 
-    // Switching to a single method:
     if (method) {
       setParts([{ method, amountPence: servicesTotalPence }]);
-    }
-
-    // Clearing selection:
-    if (method === "") {
-      setParts([{ method: "card", amountPence: 0 }]);
+    } else {
+      setParts([{ method: "card", amountPence: servicesTotalPence }]);
     }
   };
 
@@ -120,16 +142,13 @@ const PaymentMethodsCard: React.FC<{
   ) => {
     setSubmitError(null);
     setSubmitOk(null);
-
     setParts((prev) => {
       const next = [...prev];
-
       if (field === "amountPence") {
         next[index] = { ...next[index], amountPence: poundsToPence(value) };
       } else {
         next[index] = { ...next[index], method: value as SplitPaymentPart["method"] };
       }
-
       return next;
     });
   };
@@ -137,11 +156,9 @@ const PaymentMethodsCard: React.FC<{
   const addPaymentPart = () => {
     setSubmitError(null);
     setSubmitOk(null);
-
     setParts((prev) => {
       const allocated = prev.reduce((s, p) => s + p.amountPence, 0);
       const remaining = Math.max(0, servicesTotalPence - allocated);
-
       return [...prev, { method: "card", amountPence: remaining }];
     });
   };
@@ -149,7 +166,6 @@ const PaymentMethodsCard: React.FC<{
   const removePaymentPart = (index: number) => {
     setSubmitError(null);
     setSubmitOk(null);
-
     setParts((prev) => prev.filter((_, i) => i !== index));
   };
 
@@ -157,34 +173,42 @@ const PaymentMethodsCard: React.FC<{
     setSubmitError(null);
     setSubmitOk(null);
 
-    if (isPaid && paymentMethod === "") {
+    if (!isPaid) return;
+    if (paymentMethod === "") {
       setSubmitError("Please select a payment method.");
       return;
     }
-
-    if (isPaid && paymentMethod === "split" && !isSplitValid) {
+    if (paymentMethod === "split" && !isSplitValid) {
       setSubmitError("Split amounts must add up to the total services amount.");
       return;
     }
 
-    let payload: PaymentPayload;
+    const now = new Date().toISOString();
+    const paymentMethods: PaymentMethod[] =
+      paymentMethod === "split"
+        ? parts.map((part) => ({
+            isPaid: true,
+            MethodName: part.method,
+            amount: part.amountPence,
+            jobId,
+            createdAt: now,
+            updatedAt: now,
+          }))
+        : [
+            {
+              isPaid: true,
+              MethodName: paymentMethod as Exclude<PaymentMethodType, "" | "split">,
+              amount: servicesTotalPence,
+              jobId,
+              createdAt: now,
+              updatedAt: now,
+            },
+          ];
 
-    if (!isPaid) {
-      payload = { isPaid: false, paymentMethod: "", amountPence: servicesTotalPence };
-    } else if (paymentMethod === "split") {
-      payload = {
-        isPaid: true,
-        paymentMethod: "split",
-        amountPence: servicesTotalPence,
-        parts,
-      };
-    } else {
-      payload = {
-        isPaid: true,
-        paymentMethod: paymentMethod as Exclude<PaymentMethod, "" | "split">,
-        amountPence: servicesTotalPence,
-      };
-    }
+    const payload: PaymentPayload = {
+      isPaid: true,
+      paymentMethods,
+    };
 
     try {
       setIsSubmitting(true);
@@ -198,28 +222,24 @@ const PaymentMethodsCard: React.FC<{
   };
 
   return (
-    <div className={`rounded-2xl border border-gray-200 bg-white p-4 ${className ?? ""}`}>
+    <div
+      className={`rounded-2xl border border-gray-200 bg-white p-4 dark:border-gray-800 dark:bg-white/[0.03] ${className ?? ""}`}
+    >
       <div className="flex items-start justify-between gap-3">
         <div>
-          <h3 className="text-sm font-semibold text-gray-900">Payment</h3>
-          <p className="text-xs text-gray-500 mt-1">
-            Record how this job was paid.
-          </p>
+          <h3 className="text-sm font-semibold text-gray-900 dark:text-white/90">Payment</h3>
+          <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">Record how this job was paid.</p>
         </div>
 
-        <label className="flex items-center gap-2 text-sm">
+        <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
           <input
             type="checkbox"
-            className="h-4 w-4 rounded border-gray-300"
+            className="h-4 w-4 rounded border-gray-300 dark:border-gray-700 dark:bg-gray-900"
             checked={isPaid}
             onChange={(e) => {
               const checked = e.target.checked;
               setIsPaid(checked);
-
-              // when marking as paid, default a method
               if (checked && paymentMethod === "") setPaymentMethod("card");
-
-              // when unmarking, clear selection
               if (!checked) setPaymentMethod("");
             }}
           />
@@ -229,16 +249,15 @@ const PaymentMethodsCard: React.FC<{
 
       {isPaid && (
         <div className="mt-4 space-y-3">
-          {/* Payment method */}
           <div className="space-y-2">
-            <label className="text-xs font-semibold uppercase text-gray-500">
+            <label className="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">
               Payment method
             </label>
 
             <select
-              className="w-full rounded-md border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full rounded-md border border-gray-200 bg-white px-3 py-2 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90"
               value={paymentMethod}
-              onChange={(e) => setPaymentMethod(e.target.value as PaymentMethod)}
+              onChange={(e) => setPaymentMethod(e.target.value as PaymentMethodType)}
             >
               <option value="">{methodLabel("")}</option>
               <option value="cash">{methodLabel("cash")}</option>
@@ -248,15 +267,10 @@ const PaymentMethodsCard: React.FC<{
               <option value="split">{methodLabel("split")}</option>
             </select>
 
-            <p className="text-xs text-gray-500">
-              Choose a single method or select split to use multiple methods.
-            </p>
-
-            {/* Optional checkbox mirror */}
-            <label className="flex items-center gap-2 text-sm">
+            <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
               <input
                 type="checkbox"
-                className="h-4 w-4 rounded border-gray-300"
+                className="h-4 w-4 rounded border-gray-300 dark:border-gray-700 dark:bg-gray-900"
                 checked={paymentMethod === "split"}
                 onChange={(e) => setPaymentMethod(e.target.checked ? "split" : "")}
               />
@@ -264,13 +278,12 @@ const PaymentMethodsCard: React.FC<{
             </label>
           </div>
 
-          {/* Split UI */}
           {isSplitSelected && (
-            <div className="space-y-3 rounded-md bg-gray-50 p-3">
+            <div className="space-y-3 rounded-md bg-gray-50 p-3 dark:bg-gray-900">
               {parts.map((part, index) => (
                 <div key={index} className="flex gap-2">
                   <select
-                    className="flex-1 rounded-md border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="flex-1 rounded-md border border-gray-200 bg-white px-3 py-2 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-700 dark:bg-gray-800 dark:text-white/90"
                     value={part.method}
                     onChange={(e) => updatePaymentPart(index, "method", e.target.value)}
                   >
@@ -284,7 +297,7 @@ const PaymentMethodsCard: React.FC<{
                     type="number"
                     min="0"
                     step="0.01"
-                    className="w-28 rounded-md border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-28 rounded-md border border-gray-200 bg-white px-3 py-2 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-700 dark:bg-gray-800 dark:text-white/90"
                     value={penceToPoundsInput(part.amountPence)}
                     onChange={(e) => updatePaymentPart(index, "amountPence", e.target.value)}
                     placeholder="Amount"
@@ -293,11 +306,11 @@ const PaymentMethodsCard: React.FC<{
                   {parts.length > 1 && (
                     <button
                       type="button"
-                      className="text-xs text-red-500 px-2"
+                      className="px-2 text-xs text-red-600 dark:text-red-400"
                       onClick={() => removePaymentPart(index)}
                       title="Remove"
                     >
-                      ✕
+                      x
                     </button>
                   )}
                 </div>
@@ -305,48 +318,20 @@ const PaymentMethodsCard: React.FC<{
 
               <button
                 type="button"
-                className="text-xs font-medium underline"
+                className="text-xs font-medium underline text-gray-700 dark:text-gray-300"
                 onClick={addPaymentPart}
               >
                 + Add split
               </button>
 
-              <div className="text-xs text-gray-500">
-                Total services: {formatGBPFromPence(servicesTotalPence)}
-              </div>
-
               {!isSplitValid ? (
-                <div className="rounded-md border border-red-200 bg-red-50 p-2 text-xs text-red-700">
-                  Split total is{" "}
-                  <span className="font-semibold">
-                    {formatGBPFromPence(splitTotalPence)}
-                  </span>{" "}
-                  but total services are{" "}
-                  <span className="font-semibold">
-                    {formatGBPFromPence(servicesTotalPence)}
-                  </span>
-                  .
-                  <br />
-                  {splitDiffPence > 0 ? (
-                    <>
-                      You still need to allocate{" "}
-                      <span className="font-semibold">
-                        {formatGBPFromPence(splitDiffPence)}
-                      </span>
-                      .
-                    </>
-                  ) : (
-                    <>
-                      You’ve allocated{" "}
-                      <span className="font-semibold">
-                        {formatGBPFromPence(Math.abs(splitDiffPence))}
-                      </span>{" "}
-                      too much.
-                    </>
-                  )}
+                <div className="rounded-md border border-red-200 bg-red-50 p-2 text-xs text-red-700 dark:border-red-900/40 dark:bg-red-900/20 dark:text-red-300">
+                  Split total is <span className="font-semibold">{formatGBPFromPence(splitTotalPence)}</span> but
+                  total services are{" "}
+                  <span className="font-semibold">{formatGBPFromPence(servicesTotalPence)}</span>.
                 </div>
               ) : (
-                <div className="rounded-md border border-green-200 bg-green-50 p-2 text-xs text-green-700">
+                <div className="rounded-md border border-green-200 bg-green-50 p-2 text-xs text-green-700 dark:border-green-900/40 dark:bg-green-900/20 dark:text-green-300">
                   Split total matches the service total.
                 </div>
               )}
@@ -355,46 +340,45 @@ const PaymentMethodsCard: React.FC<{
         </div>
       )}
 
-      {/* Total + Submit */}
-      <div className="mt-4 border-t pt-4 space-y-3">
+      <div className="mt-4 space-y-3 border-t border-gray-200 pt-4 dark:border-gray-800">
         <div className="flex items-center justify-between">
-          <div className="text-sm text-gray-600">Total Amount</div>
-          <div className="text-xl font-bold text-gray-900">
+          <div className="text-sm text-gray-600 dark:text-gray-400">Total Amount</div>
+          <div className="text-xl font-bold text-gray-900 dark:text-white">
             {formatGBPFromPence(servicesTotalPence)}
           </div>
         </div>
 
         {submitError && (
-          <div className="rounded-md border border-red-200 bg-red-50 p-2 text-xs text-red-700">
+          <div className="rounded-md border border-red-200 bg-red-50 p-2 text-xs text-red-700 dark:border-red-900/40 dark:bg-red-900/20 dark:text-red-300">
             {submitError}
           </div>
         )}
 
         {submitOk && (
-          <div className="rounded-md border border-green-200 bg-green-50 p-2 text-xs text-green-700">
+          <div className="rounded-md border border-green-200 bg-green-50 p-2 text-xs text-green-700 dark:border-green-900/40 dark:bg-green-900/20 dark:text-green-300">
             {submitOk}
           </div>
         )}
 
-        <button
-          type="button"
-          onClick={handleSubmit}
-          disabled={!canSubmit || isSubmitting}
-          className="w-full rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-        >
-          {isSubmitting ? "Submitting..." : "Submit Payment"}
-        </button>
+        {isPaid ? (
+          <button
+            type="button"
+            onClick={handleSubmit}
+            disabled={!canSubmit || isSubmitting}
+            className="w-full rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {isSubmitting ? "Submitting..." : "Submit Payment"}
+          </button>
+        ) : null}
 
         <div className="text-[11px] text-gray-400">
           {isPaid ? (
             <>
               Paid via{" "}
-              <span className="font-medium text-gray-600">
+              <span className="font-medium text-gray-600 dark:text-gray-300">
                 {methodLabel(paymentMethod)}
               </span>
-              {paymentMethod === "split" ? (
-                <> • Split total {formatGBPFromPence(splitTotalPence)}</>
-              ) : null}
+              {paymentMethod === "split" ? <> - Split total {formatGBPFromPence(splitTotalPence)}</> : null}
             </>
           ) : (
             <>Marked as unpaid</>
@@ -405,51 +389,4 @@ const PaymentMethodsCard: React.FC<{
   );
 };
 
-/**
- * FULL PAGE EXAMPLE (dummy job + payment card)
- * Replace the dummy job later and wire onSubmit to your API.
- */
-const ViewJobPaymentPage: React.FC = () => {
-  // Dummy job data (serviceCharge is in pence)
-  const job = {
-    id: 492,
-    title: "Vehicle Inspection",
-    invoiceId: "INV-000128",
-    serviceCharge: 10450, // £104.50 (PENCE)
-    customer: {
-      name: "Aisha Khan",
-      email: "aisha.khan@email.com",
-      phoneNumber: "07400 123456",
-    },
-    dueDate: "2025-12-25",
-  };
-
-  const handleSubmitPayment = async (payload: PaymentPayload) => {
-    // Replace with: await JobService.updateJobPayment(job.id, payload)
-    console.log("Submitting payment payload:", payload);
-
-    // simulate latency
-    await new Promise((r) => setTimeout(r, 400));
-  };
-
-  const formatDateOnly = (value: string) => {
-    const d = new Date(value);
-    if (Number.isNaN(d.getTime())) return value;
-    return new Intl.DateTimeFormat("en-GB", {
-      day: "2-digit",
-      month: "short",
-      year: "numeric",
-    }).format(d);
-  };
-
-  return (
-    <div className="p-4 md:p-6 space-y-6">
-      <PaymentMethodsCard
-        servicesTotalPence={job.serviceCharge}
-        onSubmit={handleSubmitPayment}
-      />
-    </div>
-  );
-};
-
-export default ViewJobPaymentPage;
+export default PaymentMethodsCard;

@@ -811,6 +811,63 @@ span.flatpickr-weekday,
   @apply min-h-screen;
 }
 
+@media (max-width: 640px) {
+  .fc-dayGridMonth-view.fc-view.fc-daygrid {
+    min-width: 100%;
+  }
+
+  .fc .fc-toolbar.fc-header-toolbar {
+    padding: 12px;
+    gap: 8px;
+  }
+
+  .fc-toolbar-title {
+    font-size: 16px !important;
+  }
+
+  .fc-button-group .fc-button {
+    height: 34px !important;
+    width: 34px !important;
+  }
+
+  .fc-addEventButton-button {
+    padding: 8px 10px !important;
+    font-size: 12px !important;
+  }
+
+  .fc .fc-col-header-cell-cushion {
+    padding: 8px 4px !important;
+    font-size: 10px !important;
+  }
+
+  .fc .fc-daygrid-day {
+    padding: 2px;
+  }
+
+  .fc .fc-daygrid-day-number {
+    padding: 6px !important;
+    font-size: 12px;
+  }
+
+  .fc-daygrid-event.fc-event-start {
+    margin-left: 2px !important;
+  }
+
+  .event-fc-color {
+    border-radius: 6px;
+    padding: 3px 6px;
+  }
+
+  .event-fc-color .fc-event-title,
+  .event-fc-color .fc-event-time {
+    font-size: 11px;
+    line-height: 1.1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+}
+
 .simplebar-scrollbar::before {
   @apply !bg-gray-200 !rounded-full dark:!bg-gray-700 !opacity-100;
 }
