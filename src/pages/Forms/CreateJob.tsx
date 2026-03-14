@@ -197,7 +197,9 @@ export default function CreateJob() {
 
     try {
       const response = await createServiceMutation.mutateAsync(payload);
-      const created: Service = (response as any)?.data ?? (response as any);
+      const responseData = response as unknown;
+      const created: Service =
+        (responseData as { data?: Service })?.data ?? (responseData as Service);
       const createdId = Number(created?.id);
 
       if (!Number.isFinite(createdId) || createdId <= 0) {
@@ -232,9 +234,10 @@ export default function CreateJob() {
       setServiceDraft({ name: "", description: "", price: "" });
       setShowCreateService(false);
       setServiceCreateOk(`Created and added "${newOption.label}".`);
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const err = error as { response?: { data?: { message?: string } }; message?: string };
       setServiceCreateError(
-        error?.response?.data?.message ?? error?.message ?? "Failed to create service."
+        err?.response?.data?.message ?? err?.message ?? "Failed to create service."
       );
     }
   };
@@ -303,8 +306,10 @@ export default function CreateJob() {
 
     if (createJobMutation) {
       createJobMutation.mutate(newJob, {
-        onSuccess: (response: any) => {
-          const createdJob: Job = response?.data ?? response;
+        onSuccess: (response: unknown) => {
+          const responseData = response as { data?: Job } | Job;
+          const createdJob: Job =
+            (responseData as { data?: Job }).data ?? (responseData as Job);
 
           setAlert({
             show: true,
@@ -316,13 +321,14 @@ export default function CreateJob() {
           setTimeout(() => setAlert(null), 4000);
           navigate(`/view-job/${createdJob.id}`, { replace: true });
         },
-        onError: (error: any) => {
+        onError: (error: unknown) => {
+          const err = error as { response?: { data?: { message?: string } }; message?: string };
           setAlert({
             show: true,
             variant: "error",
             title: "Failed to Create Job",
             message:
-              error?.response?.data?.message || "An error occurred while creating the job.",
+              err?.response?.data?.message ?? err?.message ?? "An error occurred while creating the job.",
           });
         },
       });

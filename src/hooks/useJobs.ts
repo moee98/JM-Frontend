@@ -12,12 +12,7 @@ export function useCreateJob() {
   return useMutation<Job, Error, Job>({
     mutationFn: (job: Job) => JobService.createJob(job),
     onSuccess: () => {
-      console.log("Job created successfully");
-      // Invalidate and refetch jobs list if you have a jobs query
       queryClient.invalidateQueries({ queryKey: ["jobs"] });
-    },
-    onError: (error: Error) => {
-      console.error("Error creating job:", error);
     },
   });
 }
@@ -34,8 +29,8 @@ export function useJobs() {
     try {
       const data = await JobService.getJobs();
       setJobs(data);
-    } catch (err: any) {
-      setError(err.message || "Failed to load jobs");
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Failed to load jobs");
     } finally {
       setLoading(false);
     }
@@ -86,7 +81,6 @@ export  function useJob(id?: number) {
     queryKey: ["Job", id],
     enabled: id != null,
     queryFn: () => {
-      console.log("Fetching job with id:", id);
       if (id == null) {
         throw new Error("No job id provided");
       }

@@ -4,6 +4,7 @@ import PageMeta from "../../components/common/PageMeta";
 import PageBreadcrumb from "../../components/common/PageBreadCrumb";
 import ComponentCard from "../../components/common/ComponentCard";
 import { useExpenses } from "../../hooks/useExpenses";
+import { formatFileSize } from "../../utils/errorUtils";
 
 const formatMoney = (value: number) => `GBP ${value.toFixed(2)}`;
 
@@ -15,12 +16,6 @@ const formatDate = (iso: string) => {
     month: "short",
     year: "numeric",
   });
-};
-
-const formatFileSize = (size: number) => {
-  if (size < 1024) return `${size} B`;
-  if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)} KB`;
-  return `${(size / (1024 * 1024)).toFixed(1)} MB`;
 };
 
 export default function ExpenseReportsPage() {

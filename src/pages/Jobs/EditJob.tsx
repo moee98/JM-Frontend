@@ -245,10 +245,12 @@ export default function EditJobPage() {
       await queryClient.invalidateQueries({ queryKey: ["Job", parsedJobId] });
       await queryClient.invalidateQueries({ queryKey: ["jobs"] });
       setSubmitOk("Job updated successfully.");
-      setTimeout(() => navigate(`/view-job/${parsedJobId}`), 600);
+      const destinationId = parsedJobId;
+      setTimeout(() => navigate(`/view-job/${destinationId}`), 600);
     },
-    onError: (err: any) => {
-      setSubmitError(err?.message ?? "Failed to update job.");
+    onError: (err: unknown) => {
+      const error = err as { message?: string };
+      setSubmitError(error?.message ?? "Failed to update job.");
     },
   });
 
@@ -345,7 +347,9 @@ export default function EditJobPage() {
 
     try {
       const response = await createServiceMutation.mutateAsync(payload);
-      const created: Service = (response as any)?.data ?? (response as any);
+      const responseData = response as unknown;
+      const created: Service =
+        (responseData as { data?: Service })?.data ?? (responseData as Service);
       const createdId = Number(created?.id);
 
       if (!Number.isFinite(createdId) || createdId <= 0) {
@@ -381,9 +385,10 @@ export default function EditJobPage() {
       setShowCreateService(false);
       setServiceCreateOk(`Created and added "${newOption.label}".`);
       await queryClient.invalidateQueries({ queryKey: ["services"] });
-    } catch (err: any) {
+    } catch (err: unknown) {
+      const error = err as { response?: { data?: { message?: string } }; message?: string };
       setServiceCreateError(
-        err?.response?.data?.message ?? err?.message ?? "Failed to create service."
+        error?.response?.data?.message ?? error?.message ?? "Failed to create service."
       );
     }
   };

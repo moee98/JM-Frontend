@@ -7,6 +7,7 @@ import { useJob } from "../../hooks/useJobs";
 import { updateJob as updateJobRequest } from "../../services/jobService";
 import { VehicleInspectionService } from "../../services/vehicleInspectionService";
 import { Vehicle as VehicleType } from "../../types/vehicle";
+import { getErrorMessage, formatFileSize } from "../../utils/errorUtils";
 
 type InspectionAttachmentDraft = {
   id: string;
@@ -15,25 +16,6 @@ type InspectionAttachmentDraft = {
 };
 
 const SUPPORTED_ATTACHMENT_EXTENSIONS = /\.(jpg|jpeg|png|gif|bmp|webp|pdf)$/i;
-
-const formatFileSize = (size: number) => {
-  if (size < 1024) return `${size} B`;
-  if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)} KB`;
-  return `${(size / (1024 * 1024)).toFixed(1)} MB`;
-};
-
-const getErrorMessage = (error: unknown, fallback: string) => {
-  if (
-    typeof error === "object" &&
-    error !== null &&
-    "response" in error &&
-    typeof (error as { response?: { data?: unknown } }).response?.data === "string"
-  ) {
-    return (error as { response?: { data?: string } }).response?.data ?? fallback;
-  }
-
-  return error instanceof Error ? error.message : fallback;
-};
 
 export default function VehicleInspectionFormPage() {
   const { jobId } = useParams();

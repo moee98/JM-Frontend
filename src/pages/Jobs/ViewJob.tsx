@@ -26,6 +26,9 @@ import { Job } from "../../types/job";
 import { PaymentMethodType } from "../../types/payment";
 import type { AttachmentSummary } from "../../types/attachment";
 import type { VehicleInspection } from "../../types/vehicleInspection";
+import { formatFileSize } from "../../utils/errorUtils";
+
+const round2 = (n: number) => Math.round(n * 100) / 100;
 
 // ---- Local types for payment UI ----
 type SplitPaymentPart = {
@@ -38,12 +41,6 @@ type PaymentData = {
   paymentMethod: string; // used when not split
   isSplit: boolean;
   parts: SplitPaymentPart[];
-};
-
-const formatAttachmentFileSize = (size: number) => {
-  if (size < 1024) return `${size} B`;
-  if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)} KB`;
-  return `${(size / (1024 * 1024)).toFixed(1)} MB`;
 };
 
 const isImageAttachment = (attachment: AttachmentSummary) =>
@@ -69,7 +66,7 @@ export default function ViewJobPage() {
   const id = jobId ? Number(jobId) : undefined;
 
   const queryClient = useQueryClient();
-  const { data:job, isLoading, isError, error } = useJob(id!);
+  const { data:job, isLoading, isError, error } = useJob(id);
   const [showInspectionDetails, setShowInspectionDetails] = useState(false);
   const [attachmentPreviewUrls, setAttachmentPreviewUrls] = useState<
     Record<number, string>
@@ -117,13 +114,10 @@ export default function ViewJobPage() {
     setPaymentData({
       isPaid: !!job.paid,
       paymentMethod: job.paymentMethod || "",
-      isSplit:
-        Array.isArray((job as any).paymentParts) &&
-        (job as any).paymentParts.length > 0,
-      parts:
-        ((job as any).paymentParts as SplitPaymentPart[] | undefined) ?? [
-          { method: "card", amount: 0 },
-        ],
+      isSplit: Array.isArray(job.paymentParts) && job.paymentParts.length > 0,
+      parts: (job.paymentParts as SplitPaymentPart[] | undefined) ?? [
+        { method: "card", amount: 0 },
+      ],
     });
   }, [job]);
 
@@ -167,8 +161,7 @@ export default function ViewJobPage() {
             );
 
             return [attachment.id, URL.createObjectURL(blob)] as const;
-          } catch (previewError) {
-            console.error("Failed to load inspection attachment preview.", previewError);
+          } catch {
             return null;
           }
         })
@@ -216,8 +209,6 @@ export default function ViewJobPage() {
     Math.round(
       (job?.jobServices ?? []).reduce((sum, js) => sum + ((js.price ?? 0) * 100), 0)
     );
-
-   const round2 = (n: number) => Math.round(n * 100) / 100;
 
 const splitTotal = paymentData.parts.reduce((sum, p) => {
   const amt = typeof p.amount === "number" ? p.amount : 0;
@@ -875,7 +866,7 @@ const formatMoneyFromPence = (value?: number) => {
                                     {attachment.fileName}
                                   </div>
                                   <div className="text-xs text-gray-500 dark:text-gray-400">
-                                    {formatAttachmentFileSize(attachment.fileSize)} |{" "}
+                                    {formatFileSize(attachment.fileSize)} |{" "}
                                     {formatDateTime(attachment.uploadedAt)}
                                   </div>
                                 </div>
@@ -897,7 +888,7 @@ const formatMoneyFromPence = (value?: number) => {
                                     </div>
                                     <div className="mt-1 text-xs text-gray-500 dark:text-gray-400">
                                       {attachment.contentType || "Attachment"} |{" "}
-                                      {formatAttachmentFileSize(attachment.fileSize)}
+                                      {formatFileSize(attachment.fileSize)}
                                     </div>
                                   </div>
                                 </div>

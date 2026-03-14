@@ -2,23 +2,23 @@ import { useState } from "react";
 import ComponentCard from "../../components/common/ComponentCard.tsx";
 import Label from "../../components/form/Label.tsx";
 import Input from "../../components/form/input/InputField.tsx";
-import { EnvelopeIcon, TimeIcon } from "../../icons/index.ts";
-import DatePicker from "../../components/form/date-picker.tsx";
+import { EnvelopeIcon } from "../../icons/index.ts";
 import Button from "../../components/ui/button/Button.tsx";
 import { Customer } from "../../types/customer.tsx";
 import PhoneInput from "../../components/form/group-input/PhoneInput.tsx";
 import { useCreateCustomer } from "../../hooks/useCustomer.ts";
+import { getErrorMessage } from "../../utils/errorUtils.ts";
 
 
 export interface NewCustomerFormData {
   name: string;
   email: string;
   phone: string;
-} 
+}
 
 interface CustomerFormProps {
   onDataChange?: (data: NewCustomerFormData) => void;
-  onCustomerCreated?: (customer: Customer) => void; // Add this prop
+  onCustomerCreated?: (customer: Customer) => void;
   customer?: Customer;
 }
 
@@ -27,14 +27,15 @@ export default function NewCustomerForm({ onDataChange, onCustomerCreated }: Cus
   const [name, setName] = useState<string>("");
   const [email, setEmail] = useState<string>("");
   const [phone, setPhone] = useState<string>("");
+  const [formError, setFormError] = useState<string | null>(null);
 
-  // Move the hook to the top level of the component
   const createCustomerMutation = useCreateCustomer();
 
   const handleFieldChange = (
     field: keyof NewCustomerFormData,
     value: string
   ): void => {
+    setFormError(null);
     const updatedData: NewCustomerFormData = {
       name,
       email,
@@ -51,12 +52,13 @@ export default function NewCustomerForm({ onDataChange, onCustomerCreated }: Cus
         break;
       case "phone":
         setPhone(value);
-        break; 
+        break;
     }
     onDataChange?.(updatedData);
   };
 
   function createCustomer(data: NewCustomerFormData) {
+    setFormError(null);
     const newCustomer: Customer = {
       name: data.name,
       email: data.email,
@@ -68,29 +70,25 @@ export default function NewCustomerForm({ onDataChange, onCustomerCreated }: Cus
     };
 
     createCustomerMutation.mutate(newCustomer, {
-      onSuccess: (createdCustomerResponse: any) => {
+      onSuccess: (createdCustomerResponse: unknown) => {
+        const response = createdCustomerResponse as { data?: Customer } | Customer;
         const createdCustomer: Customer =
-          createdCustomerResponse?.data ?? createdCustomerResponse;
-        console.log("Customer created successfully:", createdCustomer);
-        // Clear form fields
+          (response as { data?: Customer }).data ?? (response as Customer);
         setName("");
         setEmail("");
         setPhone("");
-        // Notify parent component
         onCustomerCreated?.(createdCustomer);
       },
-      onError: (error) => {
-        console.error("Failed to create customer:", error);
-      }
+      onError: (error: unknown) => {
+        setFormError(getErrorMessage(error, "Failed to create customer."));
+      },
     });
   }
 
   const handleSubmit = (event: React.FormEvent) => {
     event.preventDefault();
-    
-    console.log({ updatedData: { name, email, phone } });
     createCustomer({ name, email, phone });
-  } 
+  };
 
   const countries = [
     { code: "GB", label: "+44" }
@@ -99,16 +97,20 @@ export default function NewCustomerForm({ onDataChange, onCustomerCreated }: Cus
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
       <div className="space-y-6">
+        {formError ? (
+          <p className="text-sm text-red-600 dark:text-red-400">{formError}</p>
+        ) : null}
+
         <div>
-          <Label htmlFor="input">Customer Name</Label>
-          <Input 
-            type="text" 
-            id="input" 
+          <Label htmlFor="customer-name">Customer Name</Label>
+          <Input
+            type="text"
+            id="customer-name"
             value={name}
-            onChange={(e) => handleFieldChange("name", e.target.value)} 
+            onChange={(e) => handleFieldChange("name", e.target.value)}
           />
         </div>
-        
+
         <div>
           <Label>Email</Label>
           <div className="relative">
@@ -124,22 +126,21 @@ export default function NewCustomerForm({ onDataChange, onCustomerCreated }: Cus
             </span>
           </div>
         </div>
-        
+
         <div>
           <Label>Phone</Label>
           <PhoneInput
             selectPosition="start"
             countries={countries}
             placeholder="+44"
-           
             onChange={(event) => handleFieldChange("phone", event.toString())}
           />
         </div>
-        
-        <Button 
-          className="w-full" 
-          size="sm" 
-          onClick={()=>handleSubmit}
+
+        <Button
+          type="submit"
+          className="w-full"
+          size="sm"
           disabled={createCustomerMutation.isPending}
         >
           {createCustomerMutation.isPending ? "Adding..." : "Add Customer"}

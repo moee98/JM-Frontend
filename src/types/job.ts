@@ -29,7 +29,8 @@ export interface Job {
   appUserId?: string; // associated customer details
   createdBy?: string;
   customer? : Customer; // associated customer details
-  Services?: Service[]; // associated services for the job
+  Services?: Service[]; // associated services for the job (PascalCase from API)
+  services?: Service[]; // associated services for the job (camelCase alias)
   jobServices?: JobService[]; // associated job services for the job
-
+  paymentParts?: { method: string; amount: number }[]; // split payment parts
 }

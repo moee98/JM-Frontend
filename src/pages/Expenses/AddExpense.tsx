@@ -7,6 +7,7 @@ import Alert from "../../components/ui/alert/Alert";
 import { useExpenses } from "../../hooks/useExpenses";
 import { ExpenseService } from "../../services/expenseService";
 import type { ExpenseItemCategory } from "../../types/expenseItemCategory";
+import { getErrorMessage, formatFileSize } from "../../utils/errorUtils";
 
 type AddExpenseForm = {
   description: string;
@@ -33,25 +34,6 @@ const INITIAL_FORM: AddExpenseForm = {
 };
 
 const SUPPORTED_ATTACHMENT_EXTENSIONS = /\.(jpg|jpeg|png|gif|bmp|webp|pdf)$/i;
-
-const formatFileSize = (size: number) => {
-  if (size < 1024) return `${size} B`;
-  if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)} KB`;
-  return `${(size / (1024 * 1024)).toFixed(1)} MB`;
-};
-
-const getErrorMessage = (error: unknown, fallback: string) => {
-  if (
-    typeof error === "object" &&
-    error !== null &&
-    "response" in error &&
-    typeof (error as { response?: { data?: unknown } }).response?.data === "string"
-  ) {
-    return (error as { response?: { data?: string } }).response?.data ?? fallback;
-  }
-
-  return error instanceof Error ? error.message : fallback;
-};
 
 export default function AddExpensePage() {
   const { addExpense } = useExpenses();
