@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import PageMeta from "../../components/common/PageMeta";
 import PageBreadcrumb from "../../components/common/PageBreadCrumb";
 import ComponentCard from "../../components/common/ComponentCard";
@@ -16,8 +17,14 @@ const formatDate = (iso: string) => {
   });
 };
 
+const formatFileSize = (size: number) => {
+  if (size < 1024) return `${size} B`;
+  if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)} KB`;
+  return `${(size / (1024 * 1024)).toFixed(1)} MB`;
+};
+
 export default function ExpenseReportsPage() {
-  const { expenses, loading } = useExpenses();
+  const { expenses, loading, error } = useExpenses();
   const [categoryFilter, setCategoryFilter] = useState<string>("all");
   const [reimbursedFilter, setReimbursedFilter] = useState<"all" | "yes" | "no">("all");
 
@@ -61,6 +68,15 @@ export default function ExpenseReportsPage() {
       />
 
       <div className="space-y-6">
+        <div className="flex justify-end">
+          <Link
+            to="/expenses/add"
+            className="inline-flex items-center justify-center rounded-lg bg-brand-500 px-4 py-2 text-sm font-medium text-white shadow-theme-xs hover:bg-brand-600"
+          >
+            Add New Expense
+          </Link>
+        </div>
+
         <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
           <ComponentCard title="Total">
             <p className="text-2xl font-semibold text-gray-900 dark:text-white">{formatMoney(totals.total)}</p>
@@ -114,6 +130,10 @@ export default function ExpenseReportsPage() {
         </ComponentCard>
 
         <ComponentCard title="Expenses">
+          {error ? (
+            <p className="mb-4 text-sm text-red-600 dark:text-red-300">Failed to load expenses: {error}</p>
+          ) : null}
+
           {loading ? (
             <p className="text-sm text-gray-500 dark:text-gray-400">Loading expenses...</p>
           ) : filteredExpenses.length === 0 ? (
@@ -127,6 +147,7 @@ export default function ExpenseReportsPage() {
                     <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400">Description</th>
                     <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400">Category</th>
                     <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400">Payment</th>
+                    <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400">Attachments</th>
                     <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400">Reimbursed</th>
                     <th className="px-3 py-2 text-right text-xs font-medium text-gray-500 dark:text-gray-400">Amount</th>
                   </tr>
@@ -142,6 +163,30 @@ export default function ExpenseReportsPage() {
                       </td>
                       <td className="px-3 py-2 text-sm text-gray-700 dark:text-gray-200">{expense.category}</td>
                       <td className="px-3 py-2 text-sm text-gray-700 dark:text-gray-200">{expense.paymentMethod}</td>
+                      <td className="px-3 py-2 text-sm text-gray-700 dark:text-gray-200">
+                        {expense.attachments.length === 0 ? (
+                          <span className="text-gray-400 dark:text-gray-500">None</span>
+                        ) : (
+                          <div className="space-y-1">
+                            {expense.attachments.slice(0, 2).map((attachment) => (
+                              <a
+                                key={attachment.id}
+                                href={attachment.downloadUrl}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="block truncate text-brand-600 hover:underline dark:text-brand-400"
+                              >
+                                {attachment.fileName} ({formatFileSize(attachment.fileSize)})
+                              </a>
+                            ))}
+                            {expense.attachments.length > 2 ? (
+                              <p className="text-xs text-gray-500 dark:text-gray-400">
+                                +{expense.attachments.length - 2} more
+                              </p>
+                            ) : null}
+                          </div>
+                        )}
+                      </td>
                       <td className="px-3 py-2 text-sm">
                         <span
                           className={`rounded-full px-2 py-0.5 text-xs font-medium ${
@@ -167,4 +212,3 @@ export default function ExpenseReportsPage() {
     </>
   );
 }
-

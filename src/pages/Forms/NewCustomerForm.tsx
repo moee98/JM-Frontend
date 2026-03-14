@@ -7,7 +7,7 @@ import DatePicker from "../../components/form/date-picker.tsx";
 import Button from "../../components/ui/button/Button.tsx";
 import { Customer } from "../../types/customer.tsx";
 import PhoneInput from "../../components/form/group-input/PhoneInput.tsx";
-import { useCustomer, useCreateCustomer } from "../../hooks/useCustomer.ts";
+import { useCreateCustomer } from "../../hooks/useCustomer.ts";
 
 
 export interface NewCustomerFormData {
@@ -68,14 +68,16 @@ export default function NewCustomerForm({ onDataChange, onCustomerCreated }: Cus
     };
 
     createCustomerMutation.mutate(newCustomer, {
-      onSuccess: (createdCustomer) => {
+      onSuccess: (createdCustomerResponse: any) => {
+        const createdCustomer: Customer =
+          createdCustomerResponse?.data ?? createdCustomerResponse;
         console.log("Customer created successfully:", createdCustomer);
         // Clear form fields
         setName("");
         setEmail("");
         setPhone("");
         // Notify parent component
-        onCustomerCreated?.(newCustomer);
+        onCustomerCreated?.(createdCustomer);
       },
       onError: (error) => {
         console.error("Failed to create customer:", error);

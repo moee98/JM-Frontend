@@ -1,4 +1,4 @@
-import { Routes, Route, BrowserRouter as Router } from "react-router-dom";
+import { Routes, Route, BrowserRouter as Router, Navigate } from "react-router-dom";
 import ProtectedRoute from "./components/ProtectedRoute";
 
 import SignIn from "./pages/AuthPages/SignIn";
@@ -66,7 +66,8 @@ const AppRoutes = () => (
         
       />
         <Route path="/basic-tables" element={<BasicTables />} />
-        <Route path="/jobs-tables" element={<JobsTables />} />
+        <Route path="/jobs" element={<JobsTables />} />
+        <Route path="/jobs-tables" element={<Navigate to="/jobs" replace />} />
         <Route path="/alerts" element={<Alerts />} />
         <Route path="/avatars" element={<Avatars />} />
         <Route path="/badge" element={<Badges />} />

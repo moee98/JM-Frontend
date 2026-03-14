@@ -1,34 +1,38 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
+import ComponentCard from "../../components/common/ComponentCard";
 import PageBreadcrumb from "../../components/common/PageBreadCrumb";
 import PageMeta from "../../components/common/PageMeta";
-import ComponentCard from "../../components/common/ComponentCard";
 import { useJob } from "../../hooks/useJobs";
+import { updateJob as updateJobRequest } from "../../services/jobService";
+import { VehicleInspectionService } from "../../services/vehicleInspectionService";
 import { Vehicle as VehicleType } from "../../types/vehicle";
-import {
-  VehicleInspectionService,
-  buildVehicleInspectionImageName,
-} from "../../services/vehicleInspectionService";
 
-type InspectionImage = {
+type InspectionAttachmentDraft = {
   id: string;
   file: File;
-  previewUrl: string;
-  selected: boolean;
+  previewUrl: string | null;
 };
 
-const readCurrentUserId = () => {
-  const raw = localStorage.getItem("user");
-  if (!raw) return "";
+const SUPPORTED_ATTACHMENT_EXTENSIONS = /\.(jpg|jpeg|png|gif|bmp|webp|pdf)$/i;
 
-  try {
-    const parsed = JSON.parse(raw);
-    if (parsed && typeof parsed.id === "string") return parsed.id;
-  } catch {
-    // Keep fallback for existing string-only localStorage entries.
+const formatFileSize = (size: number) => {
+  if (size < 1024) return `${size} B`;
+  if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)} KB`;
+  return `${(size / (1024 * 1024)).toFixed(1)} MB`;
+};
+
+const getErrorMessage = (error: unknown, fallback: string) => {
+  if (
+    typeof error === "object" &&
+    error !== null &&
+    "response" in error &&
+    typeof (error as { response?: { data?: unknown } }).response?.data === "string"
+  ) {
+    return (error as { response?: { data?: string } }).response?.data ?? fallback;
   }
 
-  return raw;
+  return error instanceof Error ? error.message : fallback;
 };
 
 export default function VehicleInspectionFormPage() {
@@ -44,7 +48,6 @@ export default function VehicleInspectionFormPage() {
   } = useJob(Number.isFinite(parsedJobId) ? parsedJobId : undefined);
 
   const vehicle: VehicleType | undefined = job?.vehicle;
-  const currentUserId = readCurrentUserId();
 
   const [inspectionDate, setInspectionDate] = useState(
     new Date().toISOString().slice(0, 10)
@@ -52,51 +55,69 @@ export default function VehicleInspectionFormPage() {
   const [inspectionResult, setInspectionResult] =
     useState<"Passed" | "Failed">("Passed");
   const [comments, setComments] = useState("");
-  const [images, setImages] = useState<InspectionImage[]>([]);
+  const [attachments, setAttachments] = useState<InspectionAttachmentDraft[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const attachmentsRef = useRef<InspectionAttachmentDraft[]>([]);
+
+  useEffect(() => {
+    attachmentsRef.current = attachments;
+  }, [attachments]);
 
   useEffect(() => {
     return () => {
-      images.forEach((image) => URL.revokeObjectURL(image.previewUrl));
+      attachmentsRef.current.forEach((attachment) => {
+        if (attachment.previewUrl) {
+          URL.revokeObjectURL(attachment.previewUrl);
+        }
+      });
     };
-  }, [images]);
+  }, []);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (!e.target.files) return;
+    if (!e.target.files?.length) return;
 
     const selectedFiles = Array.from(e.target.files);
-    setImages((prev) => [
+    const invalidFiles = selectedFiles.filter(
+      (file) => !SUPPORTED_ATTACHMENT_EXTENSIONS.test(file.name)
+    );
+
+    if (invalidFiles.length > 0) {
+      setError(
+        `Unsupported files: ${invalidFiles.map((file) => file.name).join(", ")}. Only images and PDFs are allowed.`
+      );
+    }
+
+    const validFiles = selectedFiles.filter((file) =>
+      SUPPORTED_ATTACHMENT_EXTENSIONS.test(file.name)
+    );
+
+    if (validFiles.length === 0) {
+      e.target.value = "";
+      return;
+    }
+
+    setError(null);
+    setAttachments((prev) => [
       ...prev,
-      ...selectedFiles.map((file) => ({
+      ...validFiles.map((file) => ({
         id: crypto.randomUUID(),
         file,
-        previewUrl: URL.createObjectURL(file),
-        selected: true,
+        previewUrl: file.type.startsWith("image/") ? URL.createObjectURL(file) : null,
       })),
     ]);
 
     e.target.value = "";
   };
 
-  const handleRemoveImage = (id: string) => {
-    setImages((prev) => {
-      const target = prev.find((img) => img.id === id);
-      if (target) URL.revokeObjectURL(target.previewUrl);
-      return prev.filter((img) => img.id !== id);
+  const handleRemoveAttachment = (id: string) => {
+    setAttachments((prev) => {
+      const target = prev.find((attachment) => attachment.id === id);
+      if (target?.previewUrl) {
+        URL.revokeObjectURL(target.previewUrl);
+      }
+      return prev.filter((attachment) => attachment.id !== id);
     });
-  };
-
-  const handleToggleImage = (id: string) => {
-    setImages((prev) =>
-      prev.map((img) =>
-        img.id === id ? { ...img, selected: !img.selected } : img
-      )
-    );
-  };
-
-  const setAllImageSelection = (selected: boolean) => {
-    setImages((prev) => prev.map((img) => ({ ...img, selected })));
   };
 
   const statusDotClass =
@@ -104,20 +125,6 @@ export default function VehicleInspectionFormPage() {
 
   const fileInputClass =
     "focus:border-brand-300 h-11 w-full overflow-hidden rounded-lg border border-gray-300 bg-transparent text-sm text-gray-500 shadow-theme-xs transition-colors file:mr-5 file:cursor-pointer file:rounded-l-lg file:border-0 file:border-r file:border-gray-200 file:bg-gray-50 file:py-3 file:pl-3.5 file:pr-3 file:text-sm file:text-gray-700 hover:file:bg-gray-100 focus:outline-hidden focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-400 dark:file:border-gray-800 dark:file:bg-white/[0.03] dark:file:text-gray-300 dark:hover:file:bg-white/[0.08]";
-
-  const renamedFiles = useMemo(
-    () =>
-      images
-        .filter((img) => img.selected)
-        .map((img, idx) => {
-          const name = buildVehicleInspectionImageName(parsedJobId, idx, img.file.name);
-          return new File([img.file], name, {
-            type: img.file.type,
-            lastModified: img.file.lastModified,
-          });
-        }),
-    [images, parsedJobId]
-  );
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -133,23 +140,40 @@ export default function VehicleInspectionFormPage() {
       return;
     }
 
+    if (!vehicle?.id) {
+      setError("This job does not have a vehicle linked yet.");
+      return;
+    }
+
     setIsSubmitting(true);
     try {
-      await VehicleInspectionService.createWithImages(
-        {
-          jobId: parsedJobId,
-          inspectionDate,
-          appUserId: currentUserId,
-          inspectionResult,
-          comments,
-          pathToImages: renamedFiles.map((file) => file.name),
-        },
-        renamedFiles
-      );
+      const createdInspection = await VehicleInspectionService.create({
+        vehicleId: vehicle.id,
+        inspectionDate: new Date(`${inspectionDate}T00:00:00`).toISOString(),
+        inspectionResult,
+        comments: comments.trim(),
+        pathToImages: [],
+      });
+
+      if (!job) {
+        throw new Error("This job could not be refreshed after creating the inspection.");
+      }
+
+      await updateJobRequest(parsedJobId, {
+        ...job,
+        vehicleInspectionId: createdInspection.id,
+      });
+
+      if (attachments.length > 0) {
+        await VehicleInspectionService.uploadAttachments(
+          createdInspection.id,
+          attachments.map((attachment) => attachment.file)
+        );
+      }
 
       navigate(`/view-job/${parsedJobId}`);
-    } catch {
-      setError("Something went wrong while saving the inspection.");
+    } catch (err) {
+      setError(getErrorMessage(err, "Something went wrong while saving the inspection."));
     } finally {
       setIsSubmitting(false);
     }
@@ -286,78 +310,61 @@ export default function VehicleInspectionFormPage() {
             </ComponentCard>
 
             <ComponentCard
-              title="Damage Photos"
-              desc="Uploaded files are named with the job id before saving."
+              title="Damage Attachments"
+              desc="Upload pre-job photos or PDFs after the inspection record is created."
             >
               <div>
                 <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300">
-                  Upload photos
+                  Upload photos or PDFs
                 </label>
                 <input
                   type="file"
-                  accept="image/*"
+                  accept=".jpg,.jpeg,.png,.gif,.bmp,.webp,.pdf,image/*,application/pdf"
                   multiple
                   onChange={handleFileChange}
                   className={fileInputClass}
                 />
-                {images.length > 0 && (
-                  <div className="mt-2 flex flex-wrap items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setAllImageSelection(true)}
-                      className="rounded-md border border-gray-300 dark:border-gray-700 px-2.5 py-1 text-xs text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800"
-                    >
-                      Select all
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setAllImageSelection(false)}
-                      className="rounded-md border border-gray-300 dark:border-gray-700 px-2.5 py-1 text-xs text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800"
-                    >
-                      Deselect all
-                    </button>
-                  </div>
-                )}
-                {renamedFiles.length > 0 && (
-                  <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
-                    Files will be saved as: {renamedFiles.map((f) => f.name).join(", ")}
-                  </p>
-                )}
+                <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
+                  Supported formats: JPG, JPEG, PNG, GIF, BMP, WEBP, and PDF.
+                </p>
               </div>
 
-              {images.length > 0 && (
-                <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-                  {images.map((image, idx) => (
+              {attachments.length > 0 && (
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                  {attachments.map((attachment, idx) => (
                     <div
-                      key={image.id}
-                      className="relative aspect-[4/3] overflow-hidden rounded-lg border border-gray-200 dark:border-gray-700"
+                      key={attachment.id}
+                      className="relative overflow-hidden rounded-lg border border-gray-200 p-3 dark:border-gray-700"
                     >
-                      <img
-                        src={image.previewUrl}
-                        alt={`Damage photo ${idx + 1}`}
-                        className={`h-full w-full object-cover ${
-                          image.selected ? "" : "opacity-50"
-                        }`}
-                      />
-                      <div className="absolute bottom-1 left-1 rounded-full bg-black/60 px-1.5 py-0.5 text-[10px] text-white">
-                        #{idx + 1}
-                      </div>
-                      <div className="absolute right-1 top-1 flex gap-1">
+                      <div className="mb-3 flex items-start justify-between gap-3">
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-sm font-medium text-gray-900 dark:text-white">
+                            {attachment.file.name}
+                          </p>
+                          <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                            #{idx + 1} | {attachment.file.type || "Unknown file type"} |{" "}
+                            {formatFileSize(attachment.file.size)}
+                          </p>
+                        </div>
                         <button
                           type="button"
-                          onClick={() => handleToggleImage(image.id)}
-                          className="rounded-md bg-white/90 dark:bg-gray-900/90 px-2 py-1 text-[10px] font-medium text-gray-700 dark:text-gray-200"
-                        >
-                          {image.selected ? "Included" : "Excluded"}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleRemoveImage(image.id)}
+                          onClick={() => handleRemoveAttachment(attachment.id)}
                           className="rounded-md bg-red-600 px-2 py-1 text-[10px] font-medium text-white"
                         >
                           Remove
                         </button>
                       </div>
+                      {attachment.previewUrl ? (
+                        <img
+                          src={attachment.previewUrl}
+                          alt={`Damage attachment ${idx + 1}`}
+                          className="aspect-[4/3] w-full rounded-md object-cover"
+                        />
+                      ) : (
+                        <div className="flex aspect-[4/3] items-center justify-center rounded-md border border-dashed border-gray-300 bg-gray-50 text-sm text-gray-500 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-400">
+                          PDF preview unavailable
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>

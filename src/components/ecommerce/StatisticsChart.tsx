@@ -103,7 +103,7 @@ export default function StatisticsChart({ jobs }: StatisticsChartProps) {
           Jobs and Revenue Trend
         </h3>
         <p className="mt-1 text-gray-500 text-theme-sm dark:text-gray-400">
-          Monthly job volume and billed value over the last 12 months
+          Job volume and billed value for the selected timeframe
         </p>
       </div>
       <div className="max-w-full overflow-x-auto custom-scrollbar">

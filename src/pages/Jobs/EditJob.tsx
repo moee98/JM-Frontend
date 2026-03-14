@@ -9,7 +9,8 @@ import Button from "../../components/ui/button/Button";
 import { useJob } from "../../hooks/useJobs";
 import { updateJob } from "../../services/jobService";
 import { Job } from "../../types/job";
-import { useService } from "../../hooks/useServices";
+import { Service } from "../../types/service";
+import { useCreateService, useService } from "../../hooks/useServices";
 
 type EditableFormState = {
   description: string;
@@ -35,6 +36,12 @@ type ChangeRow = {
   field: string;
   before: string;
   after: string;
+};
+
+type NewServiceDraft = {
+  name: string;
+  description: string;
+  price: string;
 };
 
 const formatISOToDateInput = (iso?: string) => {
@@ -63,14 +70,20 @@ const buildFormState = (job?: Job): EditableFormState => ({
 });
 
 const buildServiceRows = (job?: Job): EditableServiceRow[] =>
-  (job?.jobServices ?? []).map((js, idx) => ({
-    key: `existing-${js.id ?? idx}`,
-    jobServiceId: js.id,
-    serviceId: js.serviceId,
-    name: js.service?.name || js.service?.description || `Service ${js.serviceId}`,
-    price: Number(js.price ?? 0),
-    completed: !!js.completed,
-  }));
+  (job?.jobServices ?? []).map((js, idx) => {
+    const derivedServiceId = Number(js.serviceId ?? js.service?.id ?? 0);
+    return {
+      key: `existing-${js.id ?? derivedServiceId ?? idx}`,
+      jobServiceId: js.id,
+      serviceId: derivedServiceId,
+      name:
+        js.service?.name ||
+        js.service?.description ||
+        `Service ${Number.isFinite(derivedServiceId) ? derivedServiceId : idx + 1}`,
+      price: Number(js.price ?? 0),
+      completed: !!js.completed,
+    };
+  });
 
 const formatGBP = (value: number) => `GBP ${value.toFixed(2)}`;
 
@@ -87,11 +100,23 @@ export default function EditJobPage() {
     error,
   } = useJob(Number.isFinite(parsedJobId) ? parsedJobId : undefined);
   const { data: allServices = [] } = useService();
+  const createServiceMutation = useCreateService();
 
   const [form, setForm] = useState<EditableFormState>(buildFormState());
   const [services, setServices] = useState<EditableServiceRow[]>([]);
   const [initialServices, setInitialServices] = useState<EditableServiceRow[]>([]);
   const [newServiceId, setNewServiceId] = useState<string>("");
+  const [createdServiceOptions, setCreatedServiceOptions] = useState<
+    { id: number; label: string; price: number }[]
+  >([]);
+  const [showCreateService, setShowCreateService] = useState(false);
+  const [serviceDraft, setServiceDraft] = useState<NewServiceDraft>({
+    name: "",
+    description: "",
+    price: "",
+  });
+  const [serviceCreateError, setServiceCreateError] = useState<string | null>(null);
+  const [serviceCreateOk, setServiceCreateOk] = useState<string | null>(null);
   const [hasInitialized, setHasInitialized] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [submitOk, setSubmitOk] = useState<string | null>(null);
@@ -190,15 +215,28 @@ export default function EditJobPage() {
   );
 
   const serviceOptions = useMemo(
-    () =>
-      allServices
-        .filter((service) => !services.some((s) => s.serviceId === service.id))
-        .map((service) => ({
+    () => {
+      const mergedMap = new Map<number, { id: number; label: string; price: number }>();
+
+      allServices.forEach((service) => {
+        mergedMap.set(service.id, {
           id: service.id,
           label: service.name || service.description || `Service ${service.id}`,
           price: Number(service.estimatedPrice ?? 0),
-        })),
-    [allServices, services]
+        });
+      });
+
+      createdServiceOptions.forEach((service) => {
+        if (!mergedMap.has(service.id)) {
+          mergedMap.set(service.id, service);
+        }
+      });
+
+      return Array.from(mergedMap.values()).filter(
+        (service) => !services.some((s) => s.serviceId === service.id)
+      );
+    },
+    [allServices, createdServiceOptions, services]
   );
 
   const mutation = useMutation({
@@ -250,6 +288,8 @@ export default function EditJobPage() {
 
     setSubmitError(null);
     setSubmitOk(null);
+    setServiceCreateError(null);
+    setServiceCreateOk(null);
     setServices((prev) => [
       ...prev,
       {
@@ -263,6 +303,91 @@ export default function EditJobPage() {
     setNewServiceId("");
   };
 
+  const handleServiceDraftChange = (field: keyof NewServiceDraft, value: string) => {
+    setServiceCreateError(null);
+    setServiceCreateOk(null);
+    setServiceDraft((prev) => ({ ...prev, [field]: value }));
+  };
+
+  const handleCreateAndAddService = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (isCompletedJob) return;
+
+    setServiceCreateError(null);
+    setServiceCreateOk(null);
+    setSubmitError(null);
+    setSubmitOk(null);
+
+    const name = serviceDraft.name.trim();
+    const description = serviceDraft.description.trim();
+    const parsedPrice = Number(serviceDraft.price);
+
+    if (!name) {
+      setServiceCreateError("Service name is required.");
+      return;
+    }
+
+    if (!Number.isFinite(parsedPrice) || parsedPrice < 0) {
+      setServiceCreateError("Service price must be a valid number.");
+      return;
+    }
+
+    const nowIso = new Date().toISOString();
+    const payload: Service = {
+      id: 0,
+      name,
+      description,
+      estimatedPrice: parsedPrice,
+      createdAt: nowIso,
+      updatedAt: nowIso,
+      isActive: true,
+    };
+
+    try {
+      const response = await createServiceMutation.mutateAsync(payload);
+      const created: Service = (response as any)?.data ?? (response as any);
+      const createdId = Number(created?.id);
+
+      if (!Number.isFinite(createdId) || createdId <= 0) {
+        setServiceCreateError("Service created but no valid ID was returned.");
+        return;
+      }
+
+      const newOption = {
+        id: createdId,
+        label: created.name || name,
+        price: Number(created.estimatedPrice ?? parsedPrice),
+      };
+
+      setCreatedServiceOptions((prev) =>
+        prev.some((service) => service.id === newOption.id) ? prev : [...prev, newOption]
+      );
+
+      setServices((prev) => {
+        if (prev.some((service) => service.serviceId === newOption.id)) return prev;
+        return [
+          ...prev,
+          {
+            key: `new-${newOption.id}-${Date.now()}`,
+            serviceId: newOption.id,
+            name: newOption.label,
+            price: newOption.price,
+            completed: false,
+          },
+        ];
+      });
+
+      setServiceDraft({ name: "", description: "", price: "" });
+      setShowCreateService(false);
+      setServiceCreateOk(`Created and added "${newOption.label}".`);
+      await queryClient.invalidateQueries({ queryKey: ["services"] });
+    } catch (err: any) {
+      setServiceCreateError(
+        err?.response?.data?.message ?? err?.message ?? "Failed to create service."
+      );
+    }
+  };
+
   const validate = () => {
     if (!job) return "Job was not loaded.";
     if (isCompletedJob) return "Completed jobs are locked and cannot be edited.";
@@ -274,6 +399,9 @@ export default function EditJobPage() {
     if (services.length === 0) return "At least one service is required.";
     if (services.some((service) => !Number.isFinite(service.price) || service.price < 0)) {
       return "Each service must have a valid price.";
+    }
+    if (services.some((service) => !Number.isFinite(service.serviceId) || service.serviceId <= 0)) {
+      return "Each service must have a valid service ID.";
     }
     if (changes.length === 0) return "No changes detected. Update at least one field.";
     return null;
@@ -290,8 +418,34 @@ export default function EditJobPage() {
     const dueDateIso = new Date(`${form.dueDate}T00:00:00`).toISOString();
     const nowIso = new Date().toISOString();
 
-    const payload: Job = {
-      ...job,
+    const normalizedJobServices = services.map((service) => ({
+      id: service.jobServiceId ?? 0,
+      jobId: job.id,
+      serviceId: Number(service.serviceId),
+      price: Number(service.price),
+      completed: service.completed,
+    }));
+
+    const servicesAlias: Service[] = services.map((service) => ({
+      id: Number(service.serviceId),
+      name: service.name,
+      description: service.name,
+      estimatedPrice: Number(service.price),
+      isActive: true,
+    }));
+
+    const payload: Job & { services?: Service[] } = {
+      id: job.id,
+      customerId: job.customerId,
+      vehicleId: job.vehicleId,
+      appUserId: job.appUserId,
+      createdAt: job.createdAt,
+      isActive: job.isActive,
+      invoiceId: job.invoiceId,
+      paid: job.paid,
+      paymentMethod: job.paymentMethod,
+      paymentMethods: job.paymentMethods,
+      assignedTo: job.assignedTo,
       description: form.description.trim(),
       status: form.status,
       dueDate: dueDateIso,
@@ -312,13 +466,9 @@ export default function EditJobPage() {
         colour: form.colour.trim().toUpperCase(),
         updatedAt: nowIso,
       },
-      jobServices: services.map((service) => ({
-        id: service.jobServiceId ?? 0,
-        jobId: job.id,
-        serviceId: service.serviceId,
-        price: Number(service.price),
-        completed: service.completed,
-      })),
+      jobServices: normalizedJobServices,
+      Services: servicesAlias,
+      services: servicesAlias,
     };
 
     await mutation.mutateAsync(payload);
@@ -349,11 +499,11 @@ export default function EditJobPage() {
       <PageMeta title="Kaza Dashboard - Edit Job" description="Edit an existing job" />
       <PageBreadcrumb
         pageTitle="Edit Job"
-        items={[
-          { label: "Home", to: "/" },
-          { label: "View All Jobs", to: "/jobs-tables" },
-          { label: `Job ${parsedJobId}`, to: `/view-job/${parsedJobId}` },
-          { label: "Edit" },
+          items={[
+            { label: "Home", to: "/" },
+            { label: "View All Jobs", to: "/jobs" },
+            { label: `Job ${parsedJobId}`, to: `/view-job/${parsedJobId}` },
+            { label: "Edit" },
         ]}
       />
 
@@ -567,6 +717,93 @@ export default function EditJobPage() {
                   >
                     Add Service
                   </Button>
+                </div>
+
+                <div className="rounded-lg border border-gray-200 dark:border-gray-800 p-3">
+                  <div className="flex flex-col gap-3">
+                    <div className="flex items-center justify-between gap-3">
+                      <p className="text-sm font-medium text-gray-800 dark:text-white/90">
+                        Create new service
+                      </p>
+                      <Button
+                        variant="outline"
+                        onClick={() => {
+                          setShowCreateService((prev) => !prev);
+                          setServiceCreateError(null);
+                          setServiceCreateOk(null);
+                        }}
+                        disabled={isCompletedJob}
+                        className="w-auto"
+                      >
+                        {showCreateService ? "Cancel" : "Create Service"}
+                      </Button>
+                    </div>
+
+                    {showCreateService ? (
+                      <form onSubmit={handleCreateAndAddService} className="space-y-3">
+                        <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                          <div>
+                            <label className="mb-1 block text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">
+                              Service Name
+                            </label>
+                            <input
+                              value={serviceDraft.name}
+                              onChange={(e) => handleServiceDraftChange("name", e.target.value)}
+                              disabled={isCompletedJob || createServiceMutation.isPending}
+                              className="h-10 w-full rounded-lg border border-gray-300 bg-transparent px-3 text-sm text-gray-800 dark:text-white/90 dark:border-gray-700 dark:bg-gray-900"
+                            />
+                          </div>
+                          <div>
+                            <label className="mb-1 block text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">
+                              Price
+                            </label>
+                            <input
+                              type="number"
+                              min="0"
+                              step="0.01"
+                              value={serviceDraft.price}
+                              onChange={(e) => handleServiceDraftChange("price", e.target.value)}
+                              disabled={isCompletedJob || createServiceMutation.isPending}
+                              className="h-10 w-full rounded-lg border border-gray-300 bg-transparent px-3 text-sm text-gray-800 dark:text-white/90 dark:border-gray-700 dark:bg-gray-900"
+                            />
+                          </div>
+                          <div className="md:col-span-2">
+                            <label className="mb-1 block text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">
+                              Description
+                            </label>
+                            <textarea
+                              value={serviceDraft.description}
+                              onChange={(e) =>
+                                handleServiceDraftChange("description", e.target.value)
+                              }
+                              disabled={isCompletedJob || createServiceMutation.isPending}
+                              className="min-h-[84px] w-full rounded-lg border border-gray-300 bg-transparent px-3 py-2 text-sm text-gray-800 dark:text-white/90 dark:border-gray-700 dark:bg-gray-900"
+                            />
+                          </div>
+                        </div>
+
+                        <div className="flex justify-end">
+                          <button
+                            type="submit"
+                            disabled={isCompletedJob || createServiceMutation.isPending}
+                            className="inline-flex items-center justify-center rounded-lg bg-brand-500 px-4 py-2 text-sm font-medium text-white hover:bg-brand-600 disabled:cursor-not-allowed disabled:opacity-50"
+                          >
+                            {createServiceMutation.isPending
+                              ? "Creating..."
+                              : "Create and Add Service"}
+                          </button>
+                        </div>
+                      </form>
+                    ) : null}
+
+                    {serviceCreateError ? (
+                      <p className="text-sm text-red-600 dark:text-red-300">{serviceCreateError}</p>
+                    ) : null}
+
+                    {serviceCreateOk ? (
+                      <p className="text-sm text-green-600 dark:text-green-300">{serviceCreateOk}</p>
+                    ) : null}
+                  </div>
                 </div>
 
                 <div className="flex items-center justify-between rounded-lg border border-gray-200 dark:border-gray-800 px-3 py-2">

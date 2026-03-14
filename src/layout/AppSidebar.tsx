@@ -45,7 +45,7 @@ const navItems: NavItem[] = [
     name: "Jobs",
     icon: <ListIcon />,
     subItems: [{ name: "Create new job", path: "/create-job", pro: false },
-      { name: "View all jobs", path: "/jobs-tables", pro: false }
+      { name: "View all jobs", path: "/jobs", pro: false }
     ],
   },
   {

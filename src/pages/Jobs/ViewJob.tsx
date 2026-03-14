@@ -8,6 +8,7 @@ import {
   XCircle,
   AlertCircle,
   Edit,
+  FileText,
 } from "lucide-react";
 
 import PageBreadcrumb from "../../components/common/PageBreadCrumb";
@@ -20,8 +21,11 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import PaymentMethodsCard, { PaymentPayload } from "../Forms/PaymentMethod";
 import JobStatusDropdown, { JobStatus } from "../../components/jobs/JobStatusDropdown";
 import { updateJob as updateJobRequest } from "../../services/jobService";
+import { VehicleInspectionService } from "../../services/vehicleInspectionService";
 import { Job } from "../../types/job";
 import { PaymentMethodType } from "../../types/payment";
+import type { AttachmentSummary } from "../../types/attachment";
+import type { VehicleInspection } from "../../types/vehicleInspection";
 
 // ---- Local types for payment UI ----
 type SplitPaymentPart = {
@@ -36,6 +40,28 @@ type PaymentData = {
   parts: SplitPaymentPart[];
 };
 
+const formatAttachmentFileSize = (size: number) => {
+  if (size < 1024) return `${size} B`;
+  if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)} KB`;
+  return `${(size / (1024 * 1024)).toFixed(1)} MB`;
+};
+
+const isImageAttachment = (attachment: AttachmentSummary) =>
+  attachment.contentType.startsWith("image/") ||
+  /\.(jpg|jpeg|png|gif|bmp|webp)$/i.test(attachment.fileName);
+
+const getLatestInspectionForVehicle = (
+  inspections: VehicleInspection[],
+  vehicleId: number
+) =>
+  inspections
+    .filter((inspection) => inspection.vehicleId === vehicleId)
+    .sort(
+      (left, right) =>
+        new Date(right.inspectionDate).getTime() -
+        new Date(left.inspectionDate).getTime()
+    )[0] ?? null;
+
 export default function ViewJobPage() {
   const { jobId } = useParams();
   const navigate = useNavigate();
@@ -44,10 +70,38 @@ export default function ViewJobPage() {
 
   const queryClient = useQueryClient();
   const { data:job, isLoading, isError, error } = useJob(id!);
+  const [showInspectionDetails, setShowInspectionDetails] = useState(false);
+  const [attachmentPreviewUrls, setAttachmentPreviewUrls] = useState<
+    Record<number, string>
+  >({});
+
+  const linkedInspectionId =
+    job?.vehicleInspection?.id ?? job?.vehicleInspectionId ?? undefined;
 
   const { data: userName } = useQuery({
     queryKey: ["userName", job?.appUserId],
     queryFn: () => getUserNameById(job?.appUserId || ""),
+  });
+
+  const {
+    data: completedInspection = null,
+    isLoading: isInspectionLoading,
+    isError: hasInspectionLookupError,
+  } = useQuery({
+    queryKey: ["vehicleInspectionForJob", linkedInspectionId, job?.vehicleId],
+    enabled: Boolean(linkedInspectionId || job?.vehicleId),
+    queryFn: async () => {
+      if (linkedInspectionId) {
+        return VehicleInspectionService.getById(linkedInspectionId);
+      }
+
+      if (!job?.vehicleId) {
+        return null;
+      }
+
+      const inspections = await VehicleInspectionService.getAll();
+      return getLatestInspectionForVehicle(inspections, job.vehicleId);
+    },
   });
 
   // ---- Payment state derived from job ----
@@ -72,6 +126,82 @@ export default function ViewJobPage() {
         ],
     });
   }, [job]);
+
+  useEffect(() => {
+    setShowInspectionDetails(false);
+  }, [id]);
+
+  useEffect(() => {
+    return () => {
+      Object.values(attachmentPreviewUrls).forEach((url) => URL.revokeObjectURL(url));
+    };
+  }, [attachmentPreviewUrls]);
+
+  useEffect(() => {
+    let isCancelled = false;
+
+    const loadAttachmentPreviews = async () => {
+      if (!completedInspection) {
+        setAttachmentPreviewUrls((current) => {
+          Object.values(current).forEach((url) => URL.revokeObjectURL(url));
+          return {};
+        });
+        return;
+      }
+
+      const imageAttachments = completedInspection.attachments.filter(isImageAttachment);
+
+      if (imageAttachments.length === 0) {
+        setAttachmentPreviewUrls((current) => {
+          Object.values(current).forEach((url) => URL.revokeObjectURL(url));
+          return {};
+        });
+        return;
+      }
+
+      const previews = await Promise.all(
+        imageAttachments.map(async (attachment) => {
+          try {
+            const blob = await VehicleInspectionService.getAttachmentBlob(
+              attachment.downloadUrl
+            );
+
+            return [attachment.id, URL.createObjectURL(blob)] as const;
+          } catch (previewError) {
+            console.error("Failed to load inspection attachment preview.", previewError);
+            return null;
+          }
+        })
+      );
+
+      if (isCancelled) {
+        previews.forEach((preview) => {
+          if (preview) {
+            URL.revokeObjectURL(preview[1]);
+          }
+        });
+        return;
+      }
+
+      setAttachmentPreviewUrls((current) => {
+        Object.values(current).forEach((url) => URL.revokeObjectURL(url));
+
+        return previews.reduce<Record<number, string>>((result, preview) => {
+          if (preview) {
+            result[preview[0]] = preview[1];
+          }
+
+          return result;
+        }, {});
+      });
+    };
+
+    void loadAttachmentPreviews();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [completedInspection]);
 
   // Total in £ from backend pence value, or fallback to jobServices
   const servicesTotal =
@@ -260,6 +390,59 @@ const addPaymentPart = () => {
       
     });
   };
+
+  const formatDateTime = (iso?: string) => {
+    if (!iso) return "N/A";
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return "N/A";
+
+    return d.toLocaleString("en-GB", {
+      day: "numeric",
+      month: "long",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  };
+
+  const handleVehicleInspectionAction = () => {
+    if (completedInspection) {
+      setShowInspectionDetails((current) => !current);
+      return;
+    }
+
+    navigate(`/jobs/${jobId}/inspection/new`);
+  };
+
+  const handleOpenAttachment = async (attachment: AttachmentSummary) => {
+    try {
+      const blob = await VehicleInspectionService.getAttachmentBlob(
+        attachment.downloadUrl
+      );
+      const objectUrl = URL.createObjectURL(blob);
+      const newWindow = window.open(objectUrl, "_blank", "noopener,noreferrer");
+
+      if (!newWindow) {
+        const downloadLink = document.createElement("a");
+        downloadLink.href = objectUrl;
+        downloadLink.download = attachment.fileName;
+        downloadLink.rel = "noopener noreferrer";
+        downloadLink.click();
+      }
+
+      window.setTimeout(() => URL.revokeObjectURL(objectUrl), 60_000);
+    } catch (attachmentError) {
+      console.error("Failed to open inspection attachment.", attachmentError);
+    }
+  };
+
+  const vehicleInspectionButtonLabel = isInspectionLoading
+    ? "Checking inspection..."
+    : completedInspection
+    ? showInspectionDetails
+      ? "Hide Vehicle Inspection"
+      : "View Vehicle Inspection"
+    : "Vehicle Inspection";
   const [selectedStatus, setSelectedStatus] = useState<JobStatus>("Pending");
   const [statusUpdateError, setStatusUpdateError] = useState<string | null>(null);
 
@@ -609,6 +792,131 @@ const formatMoneyFromPence = (value?: number) => {
                   </ComponentCard>
                 )}
 
+                {showInspectionDetails && completedInspection && (
+                  <ComponentCard
+                    title="Vehicle Inspection"
+                    desc={
+                      linkedInspectionId
+                        ? "Completed inspection linked to this job."
+                        : "Showing the latest completed inspection recorded for this vehicle."
+                    }
+                  >
+                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+                      <div className="rounded-xl border border-gray-200 bg-gray-50 p-4 text-left dark:border-gray-700 dark:bg-gray-900">
+                        <div className="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                          Inspection Date
+                        </div>
+                        <div className="mt-2 text-sm font-medium text-gray-900 dark:text-white">
+                          {formatDate(completedInspection.inspectionDate)}
+                        </div>
+                      </div>
+                      <div className="rounded-xl border border-gray-200 bg-gray-50 p-4 text-left dark:border-gray-700 dark:bg-gray-900">
+                        <div className="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                          Result
+                        </div>
+                        <div className="mt-2">
+                          <span
+                            className={`inline-flex items-center rounded-full px-3 py-1 text-sm font-medium ${
+                              completedInspection.inspectionResult === "Passed"
+                                ? "bg-green-100 text-green-700 dark:bg-success-500/15 dark:text-success-300"
+                                : "bg-red-100 text-red-700 dark:bg-error-500/15 dark:text-error-300"
+                            }`}
+                          >
+                            {completedInspection.inspectionResult || "Unknown"}
+                          </span>
+                        </div>
+                      </div>
+                      <div className="rounded-xl border border-gray-200 bg-gray-50 p-4 text-left dark:border-gray-700 dark:bg-gray-900">
+                        <div className="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                          Attachments
+                        </div>
+                        <div className="mt-2 text-sm font-medium text-gray-900 dark:text-white">
+                          {completedInspection.attachments.length}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="text-left">
+                      <div className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                        Inspector Notes
+                      </div>
+                      <p className="mt-2 rounded-xl border border-gray-200 bg-gray-50 p-4 text-sm leading-relaxed text-gray-700 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300">
+                        {completedInspection.comments?.trim() || "No inspection notes were recorded."}
+                      </p>
+                    </div>
+
+                    {completedInspection.attachments.length > 0 ? (
+                      <div className="space-y-4 text-left">
+                        <div className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                          Attached Files
+                        </div>
+                        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+                          {completedInspection.attachments.map((attachment) =>
+                            isImageAttachment(attachment) ? (
+                              <button
+                                key={attachment.id}
+                                type="button"
+                                onClick={() => void handleOpenAttachment(attachment)}
+                                className="overflow-hidden rounded-xl border border-gray-200 bg-gray-50 transition hover:border-brand-300 hover:shadow-sm dark:border-gray-700 dark:bg-gray-900"
+                              >
+                                {attachmentPreviewUrls[attachment.id] ? (
+                                  <img
+                                    src={attachmentPreviewUrls[attachment.id]}
+                                    alt={attachment.fileName}
+                                    className="aspect-[4/3] w-full object-cover"
+                                  />
+                                ) : (
+                                  <div className="flex aspect-[4/3] items-center justify-center bg-gray-100 text-sm text-gray-500 dark:bg-gray-800 dark:text-gray-400">
+                                    Loading preview...
+                                  </div>
+                                )}
+                                <div className="space-y-1 p-4">
+                                  <div className="truncate text-sm font-medium text-gray-900 dark:text-white">
+                                    {attachment.fileName}
+                                  </div>
+                                  <div className="text-xs text-gray-500 dark:text-gray-400">
+                                    {formatAttachmentFileSize(attachment.fileSize)} |{" "}
+                                    {formatDateTime(attachment.uploadedAt)}
+                                  </div>
+                                </div>
+                              </button>
+                            ) : (
+                              <button
+                                key={attachment.id}
+                                type="button"
+                                onClick={() => void handleOpenAttachment(attachment)}
+                                className="flex flex-col gap-3 rounded-xl border border-gray-200 bg-gray-50 p-4 transition hover:border-brand-300 hover:shadow-sm dark:border-gray-700 dark:bg-gray-900"
+                              >
+                                <div className="flex items-start gap-3">
+                                  <div className="rounded-lg bg-brand-50 p-3 text-brand-600 dark:bg-brand-500/10 dark:text-brand-300">
+                                    <FileText className="h-5 w-5" />
+                                  </div>
+                                  <div className="min-w-0">
+                                    <div className="truncate text-sm font-medium text-gray-900 dark:text-white">
+                                      {attachment.fileName}
+                                    </div>
+                                    <div className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                                      {attachment.contentType || "Attachment"} |{" "}
+                                      {formatAttachmentFileSize(attachment.fileSize)}
+                                    </div>
+                                  </div>
+                                </div>
+                                <div className="text-xs text-brand-600 dark:text-brand-300">
+                                  Open attachment
+                                </div>
+                              </button>
+                            )
+                          )}
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="rounded-xl border border-dashed border-gray-300 p-4 text-sm text-gray-500 dark:border-gray-700 dark:text-gray-400">
+                        No images or PDFs were attached to this inspection.
+                      </div>
+                    )}
+                  </ComponentCard>
+                )}
+
                 {/* Notes */}
                 {job.notes && (
                   <ComponentCard title="Notes">
@@ -642,13 +950,17 @@ const formatMoneyFromPence = (value?: number) => {
                       Send to Customer
                     </button>
                     <button
-                      className="w-full px-4 py-2 bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 text-gray-700 dark:text-gray-200 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
-                      onClick={() =>
-                        navigate(`/jobs/${jobId}/inspection/new`)
-                      }
+                      className="w-full px-4 py-2 bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 text-gray-700 dark:text-gray-200 rounded-lg hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60 dark:hover:bg-gray-800 transition-colors"
+                      onClick={handleVehicleInspectionAction}
+                      disabled={isInspectionLoading}
                     >
-                      Vehicle Inspection
+                      {vehicleInspectionButtonLabel}
                     </button>
+                    {hasInspectionLookupError ? (
+                      <p className="text-left text-xs text-amber-600 dark:text-amber-300">
+                        Existing inspections could not be checked right now. You can still create a new one.
+                      </p>
+                    ) : null}
                   </div>
                 </ComponentCard>
                  {/* Job Details */}

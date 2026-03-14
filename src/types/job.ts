@@ -4,6 +4,7 @@ import { Customer } from "./customer";
 import { Service } from "./service";
 import { JobService } from "./jobService";
 import { PaymentMethod } from "./payment";
+import type { VehicleInspection } from "./vehicleInspection";
 
 export interface Job {
   id: number;
@@ -23,6 +24,8 @@ export interface Job {
   paymentMethods?: PaymentMethod[];
   paid : boolean ; // flag to indicate if the job has been paid
   vehicle?: Vehicle; // associated vehicle details
+  vehicleInspectionId?: number;
+  vehicleInspection?: VehicleInspection;
   appUserId?: string; // associated customer details
   createdBy?: string;
   customer? : Customer; // associated customer details

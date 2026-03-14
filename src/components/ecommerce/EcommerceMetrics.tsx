@@ -1,8 +1,10 @@
 import { Job } from "../../types/job";
+import type { ExpenseItem } from "../../types/expenseItem";
 import Badge from "../ui/badge/Badge";
 
 interface EcommerceMetricsProps {
   jobs: Job[];
+  expenses: ExpenseItem[];
 }
 
 const formatGBPFromPence = (pence: number) => `GBP ${(pence / 100).toFixed(2)}`;
@@ -15,7 +17,7 @@ const normalizeStatus = (status?: string) => {
 
 const amountPence = (job: Job) => job.serviceCharge ?? 0;
 
-export default function EcommerceMetrics({ jobs }: EcommerceMetricsProps) {
+export default function EcommerceMetrics({ jobs, expenses }: EcommerceMetricsProps) {
   const totalJobs = jobs.length;
   const completedJobs = jobs.filter(
     (job) => normalizeStatus(job.status) === "Completed"
@@ -31,6 +33,9 @@ export default function EcommerceMetrics({ jobs }: EcommerceMetricsProps) {
   const inProgressRate = totalJobs > 0 ? (inProgressJobs / totalJobs) * 100 : 0;
   const paidJobs = jobs.filter((job) => job.paid).length;
   const paidRate = totalJobs > 0 ? (paidJobs / totalJobs) * 100 : 0;
+  const totalExpensesPence = Math.round(
+    expenses.reduce((sum, expense) => sum + expense.amount, 0) * 100
+  );
 
   const cards = [
     {
@@ -56,6 +61,12 @@ export default function EcommerceMetrics({ jobs }: EcommerceMetricsProps) {
       value: paidJobs.toLocaleString(),
       badgeColor: "success" as const,
       badgeText: `${paidRate.toFixed(0)}% paid`,
+    },
+    {
+      title: "Total Expenses",
+      value: formatGBPFromPence(totalExpensesPence),
+      badgeColor: totalExpensesPence > 0 ? ("warning" as const) : ("primary" as const),
+      badgeText: totalExpensesPence > 0 ? "Costs recorded" : "No expenses logged",
     },
   ];
 

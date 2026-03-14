@@ -27,7 +27,7 @@ interface SearchSelectOption {
   );
   const [customerId, setCustomerId] = useState<string>(initialData.customerId || "");
   const [newCustomerData, setNewCustomerData] = useState<any>(initialData.newCustomerData || null);
-  const [selectedCustomerId, setSelectedCustomerId] = useState("");
+  const [selectedCustomerId, setSelectedCustomerId] = useState(initialData.customerId || "");
 
   // Use the provided hook to get customer data
   const options: SearchSelectOption[] = useCustomer().data?.map((customer: Customer) => ({
@@ -51,6 +51,7 @@ interface SearchSelectOption {
 
   const handleSelectChange = (value: string): void => {
     setCustomerId(value);
+    setSelectedCustomerId(value);
     onDataChange?.({ customerType: selectedValue, customerId: value });
   };
 
@@ -61,10 +62,20 @@ interface SearchSelectOption {
    // Handle successful customer creation
   const handleCustomerCreated = (newCustomer: Customer) => {
     console.log("New customer created:", newCustomer);
+    const createdCustomerId = newCustomer?.id?.toString?.() ?? "";
+    if (!createdCustomerId) return;
+
     // Switch to existing customer tab
     setSelectedValue("existing");
     // Select the newly created customer
-    setSelectedCustomerId(newCustomer.id.toString());
+    setCustomerId(createdCustomerId);
+    setSelectedCustomerId(createdCustomerId);
+    setNewCustomerData(newCustomer);
+    onDataChange?.({
+      customerType: "existing",
+      customerId: createdCustomerId,
+      newCustomerData: newCustomer,
+    });
   };
 
   return (
