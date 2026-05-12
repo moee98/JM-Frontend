@@ -1,4 +1,4 @@
-# Kaza Dashboard
+# Job Manager Frontend
 
 A full-stack business management dashboard for managing jobs, customers, vehicles, invoicing, and expenses. Built for internal use at a service-based business and self-hosted on a local Windows server.
 
