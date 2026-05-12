@@ -1,5 +1,4 @@
 import { useState, useId } from "react";
-import ComponentCard from "../../common/ComponentCard";
 import Radio from "../input/Radio";
 
 interface RadioOption {

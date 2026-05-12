@@ -34,6 +34,8 @@ const INITIAL_FORM: AddExpenseForm = {
 };
 
 const SUPPORTED_ATTACHMENT_EXTENSIONS = /\.(jpg|jpeg|png|gif|bmp|webp|pdf)$/i;
+const MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024; // 10 MB
+const MAX_ATTACHMENT_COUNT = 10;
 
 export default function AddExpensePage() {
   const { addExpense } = useExpenses();
@@ -136,6 +138,22 @@ export default function AddExpensePage() {
     if (!e.target.files?.length) return;
 
     const selectedFiles = Array.from(e.target.files);
+
+    if (attachments.length + selectedFiles.length > MAX_ATTACHMENT_COUNT) {
+      setError(`You can upload at most ${MAX_ATTACHMENT_COUNT} attachments.`);
+      e.target.value = "";
+      return;
+    }
+
+    const oversizedFiles = selectedFiles.filter((file) => file.size > MAX_FILE_SIZE_BYTES);
+    if (oversizedFiles.length > 0) {
+      setError(
+        `Files exceed 10 MB limit: ${oversizedFiles.map((f) => f.name).join(", ")}.`
+      );
+      e.target.value = "";
+      return;
+    }
+
     const invalidFiles = selectedFiles.filter(
       (file) => !SUPPORTED_ATTACHMENT_EXTENSIONS.test(file.name)
     );

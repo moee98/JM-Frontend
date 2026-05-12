@@ -1,7 +1,4 @@
 import { useState } from "react";
-import ComponentCard from "../../common/ComponentCard";
-import Label from "../Label";
-import Select from "../Select";
 import MultiSelect from "../MultiSelect";
 
 type options = {
@@ -11,10 +8,6 @@ type options = {
 };
 
 export default function SelectMultipleInputs({option, title}: { option: options[] , title: string }) {
-  
-  const handleSelectChange = (value: string) => {
-    console.log("Selected value:", value);
-  };
   const [selectedValues, setSelectedValues] = useState<string[]>([]);
 
   

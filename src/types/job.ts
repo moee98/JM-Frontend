@@ -1,5 +1,12 @@
+export interface PaginatedResult<T> {
+  items: T[];
+  totalCount: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+}
+
 import { Vehicle } from "./vehicle";
-import { User } from "./user";
 import { Customer } from "./customer";
 import { Service } from "./service";
 import { JobService } from "./jobService";

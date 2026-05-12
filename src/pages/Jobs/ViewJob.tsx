@@ -20,28 +20,13 @@ import {getUserNameById} from "../../hooks/useUsers";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import PaymentMethodsCard, { PaymentPayload } from "../Forms/PaymentMethod";
 import JobStatusDropdown, { JobStatus } from "../../components/jobs/JobStatusDropdown";
-import { updateJob as updateJobRequest } from "../../services/jobService";
+import { updateJob as updateJobRequest, sendInvoice } from "../../services/jobService";
 import { VehicleInspectionService } from "../../services/vehicleInspectionService";
 import { Job } from "../../types/job";
 import { PaymentMethodType } from "../../types/payment";
 import type { AttachmentSummary } from "../../types/attachment";
 import type { VehicleInspection } from "../../types/vehicleInspection";
 import { formatFileSize } from "../../utils/errorUtils";
-
-const round2 = (n: number) => Math.round(n * 100) / 100;
-
-// ---- Local types for payment UI ----
-type SplitPaymentPart = {
-  method: string;
-  amount: number | "";
-};
-
-type PaymentData = {
-  isPaid: boolean;
-  paymentMethod: string; // used when not split
-  isSplit: boolean;
-  parts: SplitPaymentPart[];
-};
 
 const isImageAttachment = (attachment: AttachmentSummary) =>
   attachment.contentType.startsWith("image/") ||
@@ -101,25 +86,10 @@ export default function ViewJobPage() {
     },
   });
 
-  // ---- Payment state derived from job ----
-  const [paymentData, setPaymentData] = useState<PaymentData>({
-    isPaid: false,
-    paymentMethod: "",
-    isSplit: false,
-    parts: [{ method: "card", amount: 0 }],
-  });
-
-  useEffect(() => {
-    if (!job) return;
-    setPaymentData({
-      isPaid: !!job.paid,
-      paymentMethod: job.paymentMethod || "",
-      isSplit: Array.isArray(job.paymentParts) && job.paymentParts.length > 0,
-      parts: (job.paymentParts as SplitPaymentPart[] | undefined) ?? [
-        { method: "card", amount: 0 },
-      ],
-    });
-  }, [job]);
+  // ---- Send invoice state ----
+  const [isSendingInvoice, setIsSendingInvoice] = useState(false);
+  const [invoiceSentOk, setInvoiceSentOk] = useState(false);
+  const [invoiceSendError, setInvoiceSendError] = useState<string | null>(null);
 
   useEffect(() => {
     setShowInspectionDetails(false);
@@ -196,110 +166,29 @@ export default function ViewJobPage() {
     };
   }, [completedInspection]);
 
-  // Total in £ from backend pence value, or fallback to jobServices
-  const servicesTotal =
-    job?.serviceCharge != null
-      ? job.serviceCharge / 100
-      : (job?.jobServices ?? []).reduce(
-          (sum, js) => sum + (js.price ?? 0),
-          0
-        );
+  // Total in pence from backend value, or fallback to jobServices
   const servicesTotalPence =
     job?.serviceCharge ??
     Math.round(
       (job?.jobServices ?? []).reduce((sum, js) => sum + ((js.price ?? 0) * 100), 0)
     );
 
-const splitTotal = paymentData.parts.reduce((sum, p) => {
-  const amt = typeof p.amount === "number" ? p.amount : 0;
-  return sum + amt;
-}, 0);
-
-const isSplitSelected = paymentData.paymentMethod === "split";
-
-const splitDiff = round2(servicesTotal - splitTotal);
-
-// valid when equal (with 2dp rounding)
-const isSplitValid = !isSplitSelected || round2(splitDiff) === 0;
-
-// optional: only show message after user starts editing split
-const shouldShowSplitValidation =
-  isSplitSelected && paymentData.parts.length > 0;
-     
-
-  const updatePaymentPart = (
-    index: number,
-    field: keyof SplitPaymentPart,
-    value: string
-  ) => {
-    setPaymentData((prev) => {
-      const parts = [...prev.parts];
-      if (field === "amount") {
-        const num = value === "" ? 0 : Number(value);
-        parts[index] = { ...parts[index], amount: isNaN(num) ? "" : num };
-      } else {
-        parts[index] = { ...parts[index], method: value };
-      }
-      return { ...prev, parts };
-    });
-  };
-
-  const submitPaymentMethod = () => {
-    if(shouldShowSplitValidation && isSplitValid)
-    {
-      // Submit split payment
+  const handleSendInvoice = async () => {
+    if (!id) return;
+    setIsSendingInvoice(true);
+    setInvoiceSentOk(false);
+    setInvoiceSendError(null);
+    try {
+      await sendInvoice(id);
+      setInvoiceSentOk(true);
+    } catch (err) {
+      setInvoiceSendError(
+        err instanceof Error ? err.message : "Failed to send invoice."
+      );
+    } finally {
+      setIsSendingInvoice(false);
     }
-    if(!isSplitSelected) {
-      // Submit single payment
-    }
-    // Submit logic here
   };
-
-const addPaymentPart = () => {
-  setPaymentData((prev) => {
-    const currentTotal = prev.parts.reduce(
-      (sum, p) => sum + (typeof p.amount === "number" ? p.amount : 0),
-      0
-    );
-
-    const remaining = Math.max(0, round2(servicesTotal - currentTotal));
-
-    return {
-      ...prev,
-      parts: [...prev.parts, { method: "card", amount: remaining }],
-    };
-  });
-};
-
-  const removePaymentPart = (index: number) => {
-    setPaymentData((prev) => ({
-      ...prev,
-      parts: prev.parts.filter((_, i) => i !== index),
-    }));
-  };
-  const setPaymentMethod = (method: string) => {
-  setPaymentData((prev) => {
-    if (method === "split") {
-      return {
-        ...prev,
-        paymentMethod: "split",
-        isSplit: true,
-        parts:
-          prev.parts.length > 0
-            ? prev.parts
-            : [{ method: "card", amount: 0 }],
-      };
-    }
-
-    // switching back to single payment
-    return {
-      ...prev,
-      paymentMethod: method,
-      isSplit: false,
-      parts: [{ method, amount: 0 }],
-    };
-  });
-};
 
   const normalizeJobStatus = (status?: string): JobStatus => {
     if (!status) return "Pending";
@@ -937,9 +826,19 @@ const formatMoneyFromPence = (value?: number) => {
                     <button onClick={() => navigate(`/invoice/${jobId}`)} className="w-full px-4 py-2 bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 text-gray-700 dark:text-gray-200 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
                       Print Invoice
                     </button>
-                    <button className="w-full px-4 py-2 bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 text-gray-700 dark:text-gray-200 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
-                      Send to Customer
+                    <button
+                      onClick={() => { void handleSendInvoice(); }}
+                      disabled={isSendingInvoice}
+                      className="w-full px-4 py-2 bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 text-gray-700 dark:text-gray-200 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-60 transition-colors"
+                    >
+                      {isSendingInvoice ? "Sending..." : "Send to Customer"}
                     </button>
+                    {invoiceSentOk ? (
+                      <p className="text-left text-xs text-green-600 dark:text-green-400">Invoice sent successfully.</p>
+                    ) : null}
+                    {invoiceSendError ? (
+                      <p className="text-left text-xs text-red-600 dark:text-red-400">{invoiceSendError}</p>
+                    ) : null}
                     <button
                       className="w-full px-4 py-2 bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 text-gray-700 dark:text-gray-200 rounded-lg hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60 dark:hover:bg-gray-800 transition-colors"
                       onClick={handleVehicleInspectionAction}

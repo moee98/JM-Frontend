@@ -95,16 +95,11 @@ export default function CreateJob() {
 
   // --------- Derived summary values --------- //
   const selectedServices = serviceData.selectedServices || [];
-  const servicesCount = selectedServices.length;
 
   const servicesTotal = selectedServices.reduce((total, service: any) => {
     const price = service.customPrice ?? service.estimatedPrice ?? 0;
     return total + price;
   }, 0);
-
-  const formattedDueDate = jobData.date
-    ? jobData.date.toLocaleDateString()
-    : "Not set";
 
   // --------- Payment helpers --------- //
   const updatePaymentPart = (
@@ -257,6 +252,7 @@ export default function CreateJob() {
       status: jobData.status,
       notes: jobData.notes,
       appUserId: user.id,
+      paid: false,
       serviceCharge: Math.round(
         serviceList.reduce((total, service) => total + service.price, 0) * 100
       ),
@@ -274,7 +270,7 @@ export default function CreateJob() {
         ? undefined
         : paymentData.paymentMethod,
       isSplitPayment: paymentData.isSplit,
-      paymentParts: paymentData.isSplit ? paymentData.parts : undefined,
+      paymentParts: paymentData.isSplit ? paymentData.parts.map(p => ({ ...p, amount: typeof p.amount === 'number' ? p.amount : 0 })) : undefined,
     };
 
     console.log("New Job Data:", newJob);

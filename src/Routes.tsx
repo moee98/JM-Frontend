@@ -21,7 +21,6 @@ import AppLayout from "./layout/AppLayout";
 import { ScrollToTop } from "./components/common/ScrollToTop";
 import Home from "./pages/Dashboard/Home";
 import JobsTables from "./pages/Tables/JobsTable";
-import NewJobForm from "./pages/Forms/FormElements";
 import CreateJob from "./pages/Forms/CreateJob";
 import ViewJobPage from "./pages/Jobs/ViewJob";
 import ViewJobTemplate from "./pages/Jobs/ViewJobTemplate";
@@ -31,6 +30,9 @@ import InvoicePage from "./pages/Jobs/Invoice";
 import EditJobPage from "./pages/Jobs/EditJob";
 import AddExpensePage from "./pages/Expenses/AddExpense";
 import ExpenseReportsPage from "./pages/Expenses/ExpenseReports";
+import OutstandingInvoicesPage from "./pages/Jobs/OutstandingInvoices";
+import SquareDashboard from "./pages/Integrations/SquareDashboard";
+import EbayDashboard from "./pages/Integrations/EbayDashboard";
 
 const AppRoutes = () => (
   <Router>
@@ -58,6 +60,9 @@ const AppRoutes = () => (
         <Route path="/edit-job/:jobId" element={<EditJobPage />} />
         <Route path="/expenses/add" element={<AddExpensePage />} />
         <Route path="/expenses/reports" element={<ExpenseReportsPage />} />
+        <Route path="/invoices/outstanding" element={<OutstandingInvoicesPage />} />
+        <Route path="/integrations/square" element={<SquareDashboard />} />
+        <Route path="/integrations/ebay" element={<EbayDashboard />} />
         <Route
         path="/jobs/:jobId/inspection/new"
         element={

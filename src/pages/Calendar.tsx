@@ -4,7 +4,7 @@ import FullCalendar from "@fullcalendar/react";
 import dayGridPlugin from "@fullcalendar/daygrid";
 import timeGridPlugin from "@fullcalendar/timegrid";
 import interactionPlugin from "@fullcalendar/interaction";
-import { DateClickArg, EventClickArg, EventInput } from "@fullcalendar/core";
+import { EventClickArg, EventInput } from "@fullcalendar/core";
 import { useJobs } from "../hooks/useJobs";
 import PageMeta from "../components/common/PageMeta";
 
@@ -80,7 +80,7 @@ const Calendar: React.FC = () => {
       });
   }, [jobs]);
 
-  const handleDateClick = (clickInfo: DateClickArg) => {
+  const handleDateClick = (clickInfo: { dateStr: string }) => {
     const calendarApi = calendarRef.current?.getApi();
     calendarApi?.changeView("timeGridDay", clickInfo.dateStr);
   };

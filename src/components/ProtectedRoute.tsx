@@ -2,17 +2,22 @@ import React, { ReactNode } from "react";
 import { Navigate } from "react-router-dom";
 
 interface ProtectedRouteProps {
-  children: ReactNode; // Accepts any valid React content
+  children: ReactNode;
 }
 
 const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children }) => {
-  const token = localStorage.getItem("accessToken"); // Use accessToken for consistency
+  // The access token is now an HTTP-only cookie and cannot be read by
+  // JavaScript. We use the presence of the refresh token as the "logged in"
+  // indicator instead. If the access cookie is actually invalid or expired,
+  // the first API call will attempt a refresh; if that also fails, apiService
+  // clears this key and redirects to /signin automatically.
+  const isLoggedIn = Boolean(localStorage.getItem("refreshToken"));
 
-  if (!token) {
+  if (!isLoggedIn) {
     return <Navigate to="/signin" replace />;
   }
 
-  return <>{children}</>; // ReactNode must be wrapped in fragment if multiple elements
+  return <>{children}</>;
 };
 
 export default ProtectedRoute;

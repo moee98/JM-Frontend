@@ -1,32 +1,13 @@
 import React, { useMemo,useRef } from "react";
-import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useJob } from "../../hooks/useJobs";
 import { Job } from "../../types/job";
 import { useReactToPrint } from "react-to-print";
 import {
-  Calendar,
-  User,
-  Clock,
-  CheckCircle,
-  XCircle,
   AlertCircle,
-  Edit,
 } from "lucide-react";
 
-import PageBreadcrumb from "../../components/common/PageBreadCrumb";
-import PageMeta from "../../components/common/PageMeta";
-import ComponentCard from "../../components/common/ComponentCard";
-import { JobService } from "../../types/jobService";
-
 type InvoiceStatus = "Draft" | "Sent" | "Paid" | "Overdue";
-
-type InvoiceLine = {
-  id: string;
-  description: string;
-  qty: number;
-  unitPrice: number; // ex VAT
-};
 
 type Invoice = {
   invoiceNumber: string;

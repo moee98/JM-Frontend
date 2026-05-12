@@ -1,8 +1,9 @@
 // src/hooks/useJobs.ts
 import { useState, useEffect } from "react";
 import * as JobService from "../services/jobService";
+import type { GetJobsParams } from "../services/jobService";
 import { getUserNameById } from "./useUsers";
-import { Job } from "../types/job";
+import { Job, PaginatedResult } from "../types/job";
 import { useMutation, useQueryClient, useQuery } from "@tanstack/react-query";
 
 // ---------- CREATE JOB ----------
@@ -17,7 +18,23 @@ export function useCreateJob() {
   });
 }
 
-// ---------- LIST + BASIC JOB OPERATIONS ----------
+// ---------- PAGINATED JOBS VIA REACT QUERY ----------
+export function useJobsPaginated(params?: GetJobsParams) {
+  return useQuery<PaginatedResult<Job>, Error>({
+    queryKey: ["jobs", params],
+    queryFn: () => JobService.getJobs(params),
+  });
+}
+
+// ---------- OUTSTANDING JOBS VIA REACT QUERY ----------
+export function useOutstandingJobs() {
+  return useQuery<Job[], Error>({
+    queryKey: ["jobs", "outstanding"],
+    queryFn: () => JobService.getOutstandingJobs(),
+  });
+}
+
+// ---------- LIST + BASIC JOB OPERATIONS (legacy) ----------
 export function useJobs() {
   const [jobs, setJobs] = useState<Job[]>([]);
   const [loading, setLoading] = useState(true);
@@ -28,7 +45,7 @@ export function useJobs() {
     setError(null);
     try {
       const data = await JobService.getJobs();
-      setJobs(data);
+      setJobs(data.items);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Failed to load jobs");
     } finally {
@@ -38,7 +55,7 @@ export function useJobs() {
 
   const addJob = async (jobData: Job) => {
     await JobService.createJob(jobData);
-    await fetchJobs(); // Refresh list after creation
+    await fetchJobs();
   };
 
   const editJob = async (id: number, jobData: Job) => {
@@ -54,13 +71,12 @@ export function useJobs() {
   const getJobById = async (id: number): Promise<Job | null> => {
     try {
       const job = await JobService.getJobById(id);
-      if(!job) {
+      if (!job) {
         setError("Job not found");
         return null;
       }
       const createdBy = await getUserNameById(job.appUserId || "");
-      if(createdBy)
-      job.createdBy = createdBy;
+      if (createdBy) job.createdBy = createdBy;
       return job;
     } catch (err) {
       setError("Failed to load job");
@@ -76,15 +92,13 @@ export function useJobs() {
 }
 
 // ---------- SINGLE JOB VIA REACT QUERY ----------
-export  function useJob(id?: number) {
+export function useJob(id?: number) {
   return useQuery<Job, Error>({
     queryKey: ["Job", id],
     enabled: id != null,
     queryFn: () => {
-      if (id == null) {
-        throw new Error("No job id provided");
-      }
-      return  JobService.getJob(id);
+      if (id == null) throw new Error("No job id provided");
+      return JobService.getJob(id);
     },
   });
 }

@@ -1,7 +1,5 @@
-import { useState, useEffect } from "react";
 import * as UserService from "../services/userService";
 import { User } from "../types/user";
-import { useMutation, useQueryClient, useQuery } from "@tanstack/react-query";
 // Fetch single user by ID
 export async function getUserById(id: string): Promise<User | null> {
   try {

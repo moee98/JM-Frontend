@@ -1,13 +1,11 @@
 import { useState } from "react";
 import { Link } from "react-router";
-import { ChevronLeftIcon, EyeCloseIcon, EyeIcon } from "../../icons";
+import { EyeCloseIcon, EyeIcon } from "../../icons";
 import Label from "../form/Label";
 import Input from "../form/input/InputField";
 import Checkbox from "../form/input/Checkbox";
 import Button from "../ui/button/Button";
 import { login } from "../../services/authService";
-
-import { useNavigate } from 'react-router-dom';
 
 export default function SignInForm() {
   const [showPassword, setShowPassword] = useState(false);
@@ -15,8 +13,6 @@ export default function SignInForm() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
-  const navigate = useNavigate();
-
 const handleSubmit = async (e: React.FormEvent) => {
   e.preventDefault();
   try {
@@ -32,31 +28,16 @@ const handleSubmit = async (e: React.FormEvent) => {
       return;
     }
 
-    const data = await response;
-
     // Save token and user info in localStorage or your preferred storage
     
    
     window.location.href = "/"; // or use your router to redirect
 
-  } catch (err) {
-    console.error("Login failed:", err);
+  } catch {
     setError("An unexpected error occurred");
   }
 };
 
-//  const handleSubmit = async (e: React.FormEvent) => {
-//     e.preventDefault();
-//     try {
-//       const data = await login(email, password);
-//       localStorage.setItem("token", data.token);
-//       localStorage.setItem("user", JSON.stringify(data.user));
-//       window.location.href = "/"; // redirect
-//     } catch (err) {
-//       console.error("Login failed:", err);
-//       setError("Invalid credentials");
-//     }
-//   };
 
   return (
     <div className="flex flex-col flex-1">
@@ -138,7 +119,7 @@ const handleSubmit = async (e: React.FormEvent) => {
                   <div className="text-error-500 text-sm">{error}</div>
                 )}
                 <div>
-                  <Button className="w-full" size="sm" onClick={()=>handleSubmit}>
+                  <Button type="submit" className="w-full" size="sm">
                     Sign in
                   </Button>
                 </div>

@@ -55,11 +55,7 @@ interface SearchSelectOption {
     onDataChange?.({ customerType: selectedValue, customerId: value });
   };
 
-  const handleNewCustomerChange = (data: any): void => {
-    setNewCustomerData(data);
-    onDataChange?.({ customerType: selectedValue, newCustomerData: data });
-  };
-   // Handle successful customer creation
+  // Handle successful customer creation
   const handleCustomerCreated = (newCustomer: Customer) => {
     console.log("New customer created:", newCustomer);
     const createdCustomerId = newCustomer?.id?.toString?.() ?? "";

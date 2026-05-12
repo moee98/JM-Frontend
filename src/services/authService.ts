@@ -6,10 +6,9 @@ const API_URL = "/api";
 export const login = async (email: string, password: string) => {
   const response = await fetch(`${API_URL}/auth/login`, {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ email, password }),
+    // withCredentials so the browser stores the HTTP-only jwt cookie
     credentials: "include",
   });
 
@@ -19,9 +18,11 @@ export const login = async (email: string, password: string) => {
 
   const data = await response.json();
 
+  // The access token is now an HTTP-only cookie set by the server.
+  // Only the refresh token (needed to renew the access cookie) and the
+  // user profile (needed for UI display) are kept in localStorage.
   localStorage.setItem("refreshToken", data.refreshToken);
-  localStorage.setItem("user", JSON.stringify(data.user.id));
-  localStorage.setItem("accessToken", data.token);
+  localStorage.setItem("user", JSON.stringify(data.user));
 
   return response;
 };
@@ -32,7 +33,7 @@ export const signup = async (
   password: string,
   phoneNumber: string
 ) => {
-  const response = await api.post(`${API_URL}/auth/register`, {
+  const response = await api.post("/auth/register", {
     name,
     email,
     password,

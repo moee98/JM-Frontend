@@ -1,5 +1,4 @@
 import { useState } from "react";
-import ComponentCard from "../../components/common/ComponentCard.tsx";
 import Label from "../../components/form/Label.tsx";
 import Input from "../../components/form/input/InputField.tsx";
 import { Vehicle } from "../../types/vehicle.tsx";
@@ -15,24 +14,6 @@ interface VehicleFormProps {
   onDataChange?: (data: VehicleFormData) => void;
   initialData?: Partial<VehicleFormData>;
   vehicle?: Vehicle;
-}
-
-interface ComponentCardProps {
-  title: string;
-  children: React.ReactNode;
-}
-
-interface LabelProps {
-  htmlFor?: string;
-  children: React.ReactNode;
-}
-
-interface InputProps {
-  type: string;
-  id: string;
-  placeholder?: string;
-  value?: string;
-  onChange?: (e: React.ChangeEvent<HTMLInputElement>) => void;
 }
 
 // Main VehicleForm Component

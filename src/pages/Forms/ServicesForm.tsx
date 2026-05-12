@@ -2,7 +2,6 @@ import { useState } from "react";
 import { useService, useCreateService } from "../../hooks/useServices";
 import SearchMultiSelect from "../../components/form/form-elements/SearchMultiSelect";
 import Button from "../../components/ui/button/Button";
-import ComponentCard from "../../components/common/ComponentCard";
 import Label from "../../components/form/Label";
 import Input from "../../components/form/input/InputField";
 import TextArea from "../../components/form/input/TextArea";
@@ -201,15 +200,6 @@ export const ServiceForm: React.FC<ServiceFormProps> = ({
       selectedServices: services 
     });
     
-  };
-
-  const handleRemoveService = (serviceId: number): void => {
-    const updatedServices = selectedServices.filter(s => s.id !== serviceId);
-    setSelectedServices(updatedServices);
-    onDataChange?.({ 
-      serviceType: 'existing', 
-      selectedServices: updatedServices 
-    });
   };
 
   const handlePriceChange = (serviceId: number, newPrice: string): void => {

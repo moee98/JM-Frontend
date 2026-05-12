@@ -35,20 +35,6 @@ type NewServiceDraft = {
 
 const formatGBP = (value: number) => `GBP ${value.toFixed(2)}`;
 
-const readCurrentUserId = () => {
-  const raw = localStorage.getItem("user");
-  if (!raw) return "";
-
-  try {
-    const parsed = JSON.parse(raw);
-    if (typeof parsed === "string") return parsed;
-    if (parsed && typeof parsed.id === "string") return parsed.id;
-  } catch {
-    // Keep compatibility with existing string-only localStorage values.
-  }
-
-  return raw;
-};
 
 export default function CreateJob() {
   const [alert, setAlert] = useState<{
@@ -297,7 +283,7 @@ export default function CreateJob() {
       dueDate: jobData.date ? jobData.date.toISOString() : nowIso,
       status: jobData.status,
       notes: jobData.notes,
-      appUserId: readCurrentUserId(),
+      // appUserId is set server-side from the authenticated JWT claim
       paid: false,
       serviceCharge: Math.round(
         serviceList.reduce((total, service) => total + Number(service.price || 0), 0) * 100

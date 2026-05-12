@@ -1,10 +1,23 @@
 // src/services/JobService.ts
 
 import api from "./apiService";
-import type { Job } from "../types/job";
+import type { Job, PaginatedResult } from "../types/job";
 
-export const getJobs = async (): Promise<Job[]> => {
-  const res = await api.get<Job[]>("/job");
+export interface GetJobsParams {
+  page?: number;
+  pageSize?: number;
+  search?: string;
+  status?: string;
+  paid?: boolean;
+}
+
+export const getJobs = async (params?: GetJobsParams): Promise<PaginatedResult<Job>> => {
+  const res = await api.get<PaginatedResult<Job>>("/job", { params });
+  return res.data;
+};
+
+export const getOutstandingJobs = async (): Promise<Job[]> => {
+  const res = await api.get<Job[]>("/job/outstanding");
   return res.data;
 };
 
@@ -29,4 +42,12 @@ export const updateJob = async (id: number, jobData: Partial<Job>): Promise<Job>
 
 export const deleteJob = async (id: number): Promise<void> => {
   await api.delete<void>(`/job/${id}`);
+};
+
+export const sendInvoice = async (id: number): Promise<void> => {
+  await api.post(`/job/${id}/send-invoice`);
+};
+
+export const sendReminder = async (id: number): Promise<void> => {
+  await api.post(`/job/${id}/send-reminder`);
 };

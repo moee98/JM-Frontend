@@ -1,5 +1,4 @@
 import { useState } from "react";
-import ComponentCard from "../../components/common/ComponentCard.tsx";
 import Label from "../../components/form/Label.tsx";
 import Input from "../../components/form/input/InputField.tsx";
 import { EnvelopeIcon } from "../../icons/index.ts";

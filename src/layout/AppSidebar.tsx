@@ -9,11 +9,11 @@ import {
   GridIcon,
   HorizontaLDots,
   ListIcon,
-  PageIcon,
   PieChartIcon,
   PlugInIcon,
   TableIcon,
   UserCircleIcon,
+  DollarLineIcon,
 } from "../icons";
 import { useSidebar } from "../context/SidebarContext";
 
@@ -54,6 +54,21 @@ const navItems: NavItem[] = [
     subItems: [
       { name: "Add Expense", path: "/expenses/add", pro: false },
       { name: "Expense Reports", path: "/expenses/reports", pro: false },
+    ],
+  },
+  {
+    name: "Finance",
+    icon: <DollarLineIcon />,
+    subItems: [
+      { name: "Outstanding Invoices", path: "/invoices/outstanding", pro: false },
+    ],
+  },
+  {
+    name: "Integrations",
+    icon: <PlugInIcon />,
+    subItems: [
+      { name: "Square Payments", path: "/integrations/square", pro: false },
+      { name: "eBay Store", path: "/integrations/ebay", pro: false },
     ],
   },
   // {

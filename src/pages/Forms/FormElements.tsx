@@ -30,7 +30,7 @@ export default function FormElements() {
           <InputGroup />
           <FileInputExample />
           <CheckboxComponents />
-          <RadioButtons />
+          <RadioButtons options={[]} />
           <ToggleSwitch />
           <DropzoneComponent />
         </div>

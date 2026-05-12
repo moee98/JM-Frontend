@@ -1,6 +1,6 @@
 import { useParams, useNavigate } from 'react-router-dom';
 import { useEffect, useState } from 'react';
-import { Calendar, DollarSign, User, Clock, CheckCircle, XCircle, AlertCircle, Edit } from 'lucide-react';
+import { Calendar, User, Clock, CheckCircle, XCircle, AlertCircle, Edit } from 'lucide-react';
 import PageBreadcrumb from "../../components/common/PageBreadCrumb";
 import PageMeta from "../../components/common/PageMeta";
 import ComponentCard from "../../components/common/ComponentCard";
@@ -100,16 +100,6 @@ export default  function ViewJobTemplate (){
       default:
         return null;
     }
-  };
-
-  const formatDate = (isoDate:Date) => {
-    return new Date(isoDate).toLocaleDateString('en-US', {
-      month: 'long',
-      day: 'numeric',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    });
   };
 
   if (isLoading) {

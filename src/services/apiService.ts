@@ -6,8 +6,6 @@ import axios, {
   InternalAxiosRequestConfig,
 } from "axios";
 
-type TokenPair = { accessToken: string; refreshToken: string };
-
 type RetriableConfig = InternalAxiosRequestConfig & {
   _retry?: boolean;
 };
@@ -16,29 +14,18 @@ class ApiService {
   private instance: AxiosInstance;
   private isRefreshing = false;
 
-  // store both resolve+reject so we can fail queued requests
   private refreshSubscribers: Array<{
-    resolve: (token: string) => void;
-    reject: (err: any) => void;
+    resolve: () => void;
+    reject: (err: unknown) => void;
   }> = [];
 
   constructor(baseURL: string) {
     this.instance = axios.create({
       baseURL,
       headers: { "Content-Type": "application/json" },
-       withCredentials: true,
-    });
-
-    // Attach token before requests
-    this.instance.interceptors.request.use((config) => {
-      const token = localStorage.getItem("accessToken");
-      config.headers = config.headers ?? {};
-
-      // Optional: don’t attach Authorization to refresh endpoint if you call it via this.instance
-      // if (config.url?.includes("/auth/refresh")) return config;
-
-      if (token) config.headers.Authorization = `Bearer ${token}`;
-      return config;
+      // withCredentials sends the HTTP-only jwt cookie on every request
+      // so we never need to read or attach the token manually.
+      withCredentials: true,
     });
 
     this.instance.interceptors.response.use(
@@ -46,48 +33,37 @@ class ApiService {
       async (error: AxiosError) => {
         const originalRequest = error.config as RetriableConfig | undefined;
 
-        // If we don’t have a request config, nothing to retry
         if (!originalRequest) return Promise.reject(error);
 
         const status = error.response?.status;
 
-        // Don’t try to refresh if the refresh endpoint itself 401s
+        // Avoid retry loops on the refresh endpoint itself
         if (originalRequest.url?.includes("/auth/refresh")) {
-          this.clearTokens();
+          this.clearSession();
           return Promise.reject(error);
         }
 
         if (status === 401 && !originalRequest._retry) {
           originalRequest._retry = true;
-          
-          // If refresh is in-flight, queue this request
+
           if (this.isRefreshing) {
             return new Promise((resolve, reject) => {
-              this.subscribeTokenRefresh(
-                (token) => {
-                  originalRequest.headers = originalRequest.headers ?? {};
-                  originalRequest.headers.Authorization = `Bearer ${token}`;
-                  resolve(this.instance(originalRequest));
-                },
-                reject
-              );
+              this.refreshSubscribers.push({
+                resolve: () => resolve(this.instance(originalRequest)),
+                reject,
+              });
             });
           }
 
           this.isRefreshing = true;
 
           try {
-            const tokens = await this.refreshToken();
-
-            this.onRefreshSuccess(tokens.accessToken);
-
-            originalRequest.headers = originalRequest.headers ?? {};
-            originalRequest.headers.Authorization = `Bearer ${tokens.accessToken}`;
-
+            await this.refreshToken();
+            this.onRefreshSuccess();
             return this.instance(originalRequest);
           } catch (refreshErr) {
             this.onRefreshFailure(refreshErr);
-            this.clearTokens();
+            this.clearSession();
             return Promise.reject(refreshErr);
           } finally {
             this.isRefreshing = false;
@@ -99,69 +75,49 @@ class ApiService {
     );
   }
 
-  private subscribeTokenRefresh(
-    resolve: (token: string) => void,
-    reject: (err: any) => void
-  ) {
-    this.refreshSubscribers.push({ resolve, reject });
-  }
-
-  private onRefreshSuccess(token: string) {
-    this.refreshSubscribers.forEach((s) => s.resolve(token));
+  private onRefreshSuccess() {
+    this.refreshSubscribers.forEach((s) => s.resolve());
     this.refreshSubscribers = [];
   }
 
-  private onRefreshFailure(err: any) {
+  private onRefreshFailure(err: unknown) {
     this.refreshSubscribers.forEach((s) => s.reject(err));
     this.refreshSubscribers = [];
   }
 
-  private async refreshToken(): Promise<TokenPair> {
-    const accessToken = localStorage.getItem("accessToken");
+  private async refreshToken(): Promise<void> {
     const refreshToken = localStorage.getItem("refreshToken");
-
     if (!refreshToken) throw new Error("No refresh token");
 
-    // Safer: use same baseURL as instance
-    const response = await this.instance.post(
-      "/auth/refresh",
-      { accessToken, refreshToken },
-      {
-        // If your server uses cookies for refresh:
-        // withCredentials: true,
-      }
-    );
+    // The expired access token is sent automatically via the HTTP-only jwt
+    // cookie. We only need to supply the refresh token in the body.
+    const response = await this.instance.post("/auth/refresh", { refreshToken });
 
-    // ✅ Adjust these names to match your API response EXACTLY
-    const newAccessToken = (response.data as any).accessToken ?? (response.data as any).token;
-    const newRefreshToken = (response.data as any).refreshToken;
+    const newRefreshToken = (response.data as { refreshToken?: string }).refreshToken;
+    if (!newRefreshToken) throw new Error("Refresh response missing token");
 
-    if (!newAccessToken || !newRefreshToken) {
-      throw new Error("Refresh response missing tokens");
-    }
-
-    localStorage.setItem("accessToken", newAccessToken);
     localStorage.setItem("refreshToken", newRefreshToken);
-
-    return { accessToken: newAccessToken, refreshToken: newRefreshToken };
   }
 
-  private clearTokens() {
-    localStorage.removeItem("accessToken");
+  private clearSession() {
     localStorage.removeItem("refreshToken");
+    localStorage.removeItem("user");
+    // Redirect to login if not already there
+    if (!window.location.pathname.startsWith("/signin")) {
+      window.location.href = "/signin";
+    }
   }
 
-  // CRUD
   get<T>(url: string, config?: AxiosRequestConfig): Promise<AxiosResponse<T>> {
     return this.instance.get<T>(url, config);
   }
-  post<T>(url: string, data?: any, config?: AxiosRequestConfig): Promise<AxiosResponse<T>> {
+  post<T>(url: string, data?: unknown, config?: AxiosRequestConfig): Promise<AxiosResponse<T>> {
     return this.instance.post<T>(url, data, config);
   }
-  put<T>(url: string, data?: any, config?: AxiosRequestConfig): Promise<AxiosResponse<T>> {
+  put<T>(url: string, data?: unknown, config?: AxiosRequestConfig): Promise<AxiosResponse<T>> {
     return this.instance.put<T>(url, data, config);
   }
-  patch<T>(url: string, data?: any, config?: AxiosRequestConfig): Promise<AxiosResponse<T>> {
+  patch<T>(url: string, data?: unknown, config?: AxiosRequestConfig): Promise<AxiosResponse<T>> {
     return this.instance.patch<T>(url, data, config);
   }
   delete<T>(url: string, config?: AxiosRequestConfig): Promise<AxiosResponse<T>> {
