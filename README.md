@@ -97,6 +97,3 @@ The project is designed for self-hosted deployment on a Windows mini PC using Do
 
 An alternative `public/web.config` is included for IIS-based deployments.
 
-## License
-
-MIT License — Copyright (c) 2026 Mahomed Ebrahim
