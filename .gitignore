@@ -4,6 +4,9 @@
 # Claude Code local settings (machine-specific)
 .claude/
 
+# VS Code workspace file (machine-specific paths)
+*.code-workspace
+
 # Logs
 logs
 *.log
