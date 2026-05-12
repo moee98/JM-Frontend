@@ -1,0 +1,71 @@
+services:
+
+  # ── SQL Server ───────────────────────────────────────────────────────────────
+  sqlserver:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    container_name: kaza-sqlserver
+    restart: unless-stopped
+    environment:
+      ACCEPT_EULA: "Y"
+      MSSQL_SA_PASSWORD: "${MSSQL_SA_PASSWORD}"
+    volumes:
+      - sqlserver-data:/var/opt/mssql
+    # Not exposed to the host by default — only the backend container talks to it.
+    # Uncomment the next two lines if you need SSMS/Azure Data Studio access from your host:
+    # ports:
+    #   - "1433:1433"
+    healthcheck:
+      test: ["CMD", "/opt/mssql-tools18/bin/sqlcmd", "-S", "localhost", "-U", "sa",
+             "-P", "${MSSQL_SA_PASSWORD}", "-Q", "SELECT 1", "-No"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  # ── ASP.NET Core API ─────────────────────────────────────────────────────────
+  backend:
+    build:
+      context: "${BACKEND_PATH}"
+      dockerfile: Dockerfile
+    container_name: kaza-backend
+    restart: unless-stopped
+    depends_on:
+      sqlserver:
+        condition: service_healthy
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      # Connection string — uses SQL auth (Windows auth is unavailable in containers)
+      ConnectionStrings__DefaultConnection: >-
+        Server=sqlserver,1433;Database=OrderManagement;
+        User Id=sa;Password=${MSSQL_SA_PASSWORD};
+        TrustServerCertificate=True;
+      # JWT — set a strong key (min 32 characters)
+      JwtSettings__Key: "${JWT_KEY}"
+      JwtSettings__Issuer: "http://kazadashboard"
+      JwtSettings__Audience: "http://kazadashboard"
+      # Cookie does not need to be Secure when behind HTTP-only internal nginx
+      Cookies__Secure: "false"
+      # SMTP (optional — only needed for Send Invoice emails)
+      Smtp__Host: "${SMTP_HOST}"
+      Smtp__Port: "${SMTP_PORT:-587}"
+      Smtp__Username: "${SMTP_USERNAME}"
+      Smtp__Password: "${SMTP_PASSWORD}"
+      Smtp__From: "${SMTP_FROM}"
+    # Backend is internal — nginx proxies /api/* to it; no direct host exposure needed.
+    # Uncomment to expose the API directly (e.g. for Swagger in dev):
+    # ports:
+    #   - "5000:5000"
+
+  # ── React Frontend (nginx) ───────────────────────────────────────────────────
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: kaza-frontend
+    restart: unless-stopped
+    depends_on:
+      - backend
+    ports:
+      - "80:80"
+
+volumes:
+  sqlserver-data:
