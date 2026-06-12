@@ -33,6 +33,9 @@ services:
         condition: service_healthy
     environment:
       ASPNETCORE_ENVIRONMENT: Production
+      # appsettings.Production.json binds Kestrel to localhost only (for the IIS/mini-PC
+      # deployment). Override here so the frontend container can reach it via "backend:5000".
+      Kestrel__Endpoints__Http__Url: "http://+:5000"
       # Connection string — uses SQL auth (Windows auth is unavailable in containers)
       ConnectionStrings__DefaultConnection: >-
         Server=sqlserver,1433;Database=OrderManagement;
