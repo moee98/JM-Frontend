@@ -114,6 +114,17 @@ export const ExpenseService = {
     return uniqueById.sort((a, b) => a.name.localeCompare(b.name));
   },
 
+  createCategory: async (name: string): Promise<ExpenseItemCategory> => {
+    const res = await api.post<unknown>(CATEGORY_ENDPOINT, { name });
+    const created = normalizeCategoryItem(res.data, 0);
+
+    if (!created) {
+      throw new Error("Failed to parse created expense category.");
+    }
+
+    return created;
+  },
+
   getAll: async (): Promise<ExpenseItem[]> => {
     const [categoryLookup, res] = await Promise.all([
       getCategoryLookup(),

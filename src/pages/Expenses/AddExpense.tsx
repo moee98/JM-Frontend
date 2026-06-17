@@ -42,6 +42,9 @@ export default function AddExpensePage() {
   const [form, setForm] = useState<AddExpenseForm>(INITIAL_FORM);
   const [expenseCategories, setExpenseCategories] = useState<ExpenseItemCategory[]>([]);
   const [loadingCategories, setLoadingCategories] = useState(true);
+  const [newCategoryName, setNewCategoryName] = useState("");
+  const [addingCategory, setAddingCategory] = useState(false);
+  const [isAddingCategory, setIsAddingCategory] = useState(false);
   const [attachments, setAttachments] = useState<ExpenseAttachmentDraft[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [ok, setOk] = useState<string | null>(null);
@@ -187,6 +190,52 @@ export default function AddExpensePage() {
     e.target.value = "";
   };
 
+  const handleAddCategory = async () => {
+    const name = newCategoryName.trim();
+    if (!name) {
+      setError("Category name is required.");
+      return;
+    }
+
+    const duplicate = expenseCategories.some(
+      (category) => category.name.toLowerCase() === name.toLowerCase()
+    );
+    if (duplicate) {
+      setError("A category with this name already exists.");
+      return;
+    }
+
+    setAddingCategory(true);
+    setError(null);
+    try {
+      const created = await ExpenseService.createCategory(name);
+      setExpenseCategories((prev) => [...prev, created]);
+      setForm((prev) => ({ ...prev, expenseCategoryId: String(created.id) }));
+      setNewCategoryName("");
+      setIsAddingCategory(false);
+    } catch (err) {
+      setError(getErrorMessage(err, "Failed to add category."));
+    } finally {
+      setAddingCategory(false);
+    }
+  };
+
+  const handleCancelAddCategory = () => {
+    setIsAddingCategory(false);
+    setNewCategoryName("");
+    setError(null);
+  };
+
+  const handleCategorySelectChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    if (e.target.value === "__new__") {
+      setIsAddingCategory(true);
+      setNewCategoryName("");
+      setError(null);
+      return;
+    }
+    setField("expenseCategoryId", e.target.value);
+  };
+
   const handleRemoveAttachment = (id: string) => {
     setAttachments((prev) => {
       const target = prev.find((attachment) => attachment.id === id);
@@ -256,18 +305,50 @@ export default function AddExpensePage() {
               <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300">
                 Category
               </label>
-              <select
-                value={form.expenseCategoryId}
-                onChange={(e) => setField("expenseCategoryId", e.target.value)}
-                className="h-11 w-full rounded-lg border border-gray-300 bg-transparent px-4 py-2.5 text-sm text-gray-800 dark:text-white/90 dark:border-gray-700 dark:bg-gray-900"
-              >
-                <option value="">{loadingCategories ? "Loading categories..." : "Select category"}</option>
-                {expenseCategories.map((category) => (
-                  <option key={category.id} value={category.id}>
-                    {category.name}
-                  </option>
-                ))}
-              </select>
+              {isAddingCategory || (!loadingCategories && expenseCategories.length === 0) ? (
+                <div className="space-y-2">
+                  {expenseCategories.length === 0 ? (
+                    <p className="text-sm text-gray-500 dark:text-gray-400">
+                      No expense categories yet. Add one to continue.
+                    </p>
+                  ) : null}
+                  <div className="flex gap-2">
+                    <input
+                      value={newCategoryName}
+                      onChange={(e) => setNewCategoryName(e.target.value)}
+                      placeholder="e.g. Fuel, Supplies"
+                      className="h-11 w-full rounded-lg border border-gray-300 bg-transparent px-4 py-2.5 text-sm text-gray-800 dark:text-white/90 dark:border-gray-700 dark:bg-gray-900"
+                    />
+                    <Button
+                      type="button"
+                      variant="primary"
+                      disabled={addingCategory}
+                      onClick={handleAddCategory}
+                    >
+                      {addingCategory ? "Adding..." : "Add"}
+                    </Button>
+                    {expenseCategories.length > 0 ? (
+                      <Button type="button" variant="outline" onClick={handleCancelAddCategory}>
+                        Cancel
+                      </Button>
+                    ) : null}
+                  </div>
+                </div>
+              ) : (
+                <select
+                  value={form.expenseCategoryId}
+                  onChange={handleCategorySelectChange}
+                  className="h-11 w-full rounded-lg border border-gray-300 bg-transparent px-4 py-2.5 text-sm text-gray-800 dark:text-white/90 dark:border-gray-700 dark:bg-gray-900"
+                >
+                  <option value="">{loadingCategories ? "Loading categories..." : "Select category"}</option>
+                  {expenseCategories.map((category) => (
+                    <option key={category.id} value={category.id}>
+                      {category.name}
+                    </option>
+                  ))}
+                  <option value="__new__">+ Add new category</option>
+                </select>
+              )}
             </div>
 
             <div>
