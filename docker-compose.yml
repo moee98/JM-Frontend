@@ -4,7 +4,7 @@ services:
   sqlserver:
     image: mcr.microsoft.com/mssql/server:2022-latest
     container_name: kaza-sqlserver
-    restart: unless-stopped
+    restart: always
     environment:
       ACCEPT_EULA: "Y"
       MSSQL_SA_PASSWORD: "${MSSQL_SA_PASSWORD}"
@@ -27,7 +27,7 @@ services:
       context: "${BACKEND_PATH}"
       dockerfile: Dockerfile
     container_name: kaza-backend
-    restart: unless-stopped
+    restart: always
     depends_on:
       sqlserver:
         condition: service_healthy
@@ -64,7 +64,7 @@ services:
       context: .
       dockerfile: Dockerfile
     container_name: kaza-frontend
-    restart: unless-stopped
+    restart: always
     depends_on:
       - backend
     ports:
